@@ -1,17 +1,13 @@
-import math
 import re
 from dataclasses import dataclass
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 try:
     import spacy
 except Exception:  # pragma: no cover - optional dependency in early setup
     spacy = None
-
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:  # pragma: no cover - optional dependency in early setup
-    SentenceTransformer = None
 
 
 DEFAULT_SKILL_LIST = {
@@ -79,17 +75,11 @@ class KeywordMatch:
 class ResumeMatcher:
     def __init__(self) -> None:
         self._nlp = None
-        self._encoder = None
         if spacy is not None:
             try:
                 self._nlp = spacy.load("en_core_web_sm")
             except Exception:
                 self._nlp = None
-        if SentenceTransformer is not None:
-            try:
-                self._encoder = SentenceTransformer("all-MiniLM-L6-v2")
-            except Exception:
-                self._encoder = None
 
     def analyze(self, resume_text: str, jd_text: str) -> dict:
         jd_keywords = self._extract_keywords(jd_text)
@@ -185,47 +175,35 @@ class ResumeMatcher:
         matched = sum(1 for item in keyword_matches if item.matched)
         return (matched / len(keyword_matches)) * 100
 
-    def _experience_score(self, resume_bullets: list[str], jd_requirements: list[str]) -> float:
+    @staticmethod
+    def _experience_score(resume_bullets: list[str], jd_requirements: list[str]) -> float:
+        """TF–IDF bag-of-words vectors + cosine similarity; mean of max sim per JD requirement."""
         if not resume_bullets or not jd_requirements:
             return 0.0
 
-        if self._encoder is not None:
-            resume_vecs = self._encoder.encode(resume_bullets)
-            jd_vecs = self._encoder.encode(jd_requirements)
-
-            top_scores = []
-            for jd_vec in jd_vecs:
-                sims = [self._cosine(jd_vec, rv) for rv in resume_vecs]
-                top_scores.append(max(sims) if sims else 0.0)
-            if not top_scores:
-                return 0.0
-            return float(sum(top_scores) / len(top_scores) * 100)
-
-        # Fallback: lexical Jaccard proxy if transformer model unavailable.
-        top_scores = []
-        for req in jd_requirements:
-            req_tokens = self._token_set(req)
-            sims = []
-            for bullet in resume_bullets:
-                bullet_tokens = self._token_set(bullet)
-                union = req_tokens | bullet_tokens
-                score = len(req_tokens & bullet_tokens) / len(union) if union else 0.0
-                sims.append(score)
-            top_scores.append(max(sims) if sims else 0.0)
-        return float(sum(top_scores) / len(top_scores) * 100) if top_scores else 0.0
-
-    @staticmethod
-    def _token_set(text: str) -> set[str]:
-        return set(re.findall(r"[a-zA-Z]{2,}", text.lower()))
-
-    @staticmethod
-    def _cosine(vec_a, vec_b) -> float:
-        dot = sum(a * b for a, b in zip(vec_a, vec_b))
-        norm_a = math.sqrt(sum(a * a for a in vec_a))
-        norm_b = math.sqrt(sum(b * b for b in vec_b))
-        if norm_a == 0 or norm_b == 0:
+        resume_clean = [b.strip() for b in resume_bullets if b and b.strip()]
+        jd_clean = [r.strip() for r in jd_requirements if r and r.strip()]
+        if not resume_clean or not jd_clean:
             return 0.0
-        return dot / (norm_a * norm_b)
+
+        vectorizer = TfidfVectorizer(
+            lowercase=True,
+            min_df=1,
+            max_df=1.0,
+            token_pattern=r"(?u)\b\w+\b",
+        )
+        corpus = resume_clean + jd_clean
+        try:
+            tfidf = vectorizer.fit_transform(corpus)
+        except ValueError:
+            return 0.0
+
+        n_r = len(resume_clean)
+        x_resume = tfidf[:n_r]
+        x_jd = tfidf[n_r:]
+        sim_matrix = cosine_similarity(x_jd, x_resume)
+        top_per_req = sim_matrix.max(axis=1)
+        return float(top_per_req.mean() * 100.0)
 
     def _build_gaps(self, keyword_matches: list[KeywordMatch]) -> list[dict]:
         gaps: list[dict] = []
