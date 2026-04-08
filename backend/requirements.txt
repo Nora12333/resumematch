@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pdfplumber
+spacy
+sentence-transformers
+anthropic
+supabase
+python-multipart
+pydantic
+python-dotenv

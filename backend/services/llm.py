@@ -1,0 +1,224 @@
+import json
+import os
+import re
+from pathlib import Path
+from typing import Any, Literal
+
+from dotenv import load_dotenv
+
+try:
+    import anthropic
+except ImportError:  # pragma: no cover
+    anthropic = None
+
+MODEL_ID = "claude-sonnet-4-20250514"
+
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _dotenv_candidates() -> list[Path]:
+    """Paths where .env may live (cwd varies when running uvicorn)."""
+    return [
+        Path.cwd() / ".env",
+        Path.cwd() / "backend" / ".env",
+        _BACKEND_ROOT / ".env",
+        Path.home() / "resumematch" / "backend" / ".env",
+    ]
+
+
+def _load_env() -> None:
+    """Load all existing candidate .env files; later files override (so real key in ~/... can win)."""
+    seen: set[Path] = set()
+    loaded_any = False
+    for raw in _dotenv_candidates():
+        try:
+            path = raw.resolve()
+        except OSError:
+            continue
+        if path in seen:
+            continue
+        seen.add(path)
+        if path.is_file():
+            load_dotenv(path, override=True)
+            loaded_any = True
+    if not loaded_any:
+        load_dotenv(override=True)
+
+
+_load_env()
+
+
+def _is_anthropic_error(exc: BaseException) -> bool:
+    mod = type(exc).__module__ or ""
+    return mod.startswith("anthropic")
+
+SYSTEM_PROMPT_SMART_FILL = """You are a professional resume editor. Your job is to improve a resume to better match a job description, based on identified skill gaps.
+
+Rules:
+1. Only add content that could plausibly be true given the candidate's existing experience
+2. Never invent specific metrics, company names, or technologies not hinted at in the original
+3. Mark all new or rewritten content with paired tags: [NEW] at the start and [NEW] at the end of each added or changed span
+4. Keep the original structure and format; do not remove or reorder sections unless a tiny fix is needed for consistency
+5. Output must be valid JSON only — no markdown fences, no explanations outside JSON
+6. Write the optimized_resume in the same language as the input resume
+
+Required JSON keys:
+- "optimized_resume": full resume text; use [NEW]... [NEW] around every new or materially updated fragment
+- "changes": list of { "original": string, "updated": string }; use "" for original when inserting wholly new lines"""
+
+SYSTEM_PROMPT_FULL_REWRITE = """You are a professional resume editor. Rewrite the resume to maximize alignment with the job description and the identified gaps, while staying fully truthful.
+
+Rules:
+1. Only include content that could plausibly be true given the candidate's existing experience; never fabricate employers, dates, degrees, or tools
+2. Reorganize sections, retitle bullets, and align wording with JD keywords where honestly applicable
+3. Mark every new or materially rewritten span with paired [NEW]... [NEW] tags (entire rewritten resume may be wrapped if appropriate, or tag per section/bullet)
+4. Prioritize ATS-relevant keywords from the JD and close skill gaps with defensible phrasing grounded in the original resume
+5. Output must be valid JSON only — no markdown fences, no explanations outside JSON
+6. Write the optimized_resume in the same language as the input resume
+
+Required JSON keys:
+- "optimized_resume": full rewritten resume text with [NEW]... [NEW] markers
+- "changes": list of { "original": string, "updated": string } summarizing major edits"""
+
+
+def _get_api_key() -> str | None:
+    _load_env()
+    raw = os.environ.get("ANTHROPIC_API_KEY", "")
+    key = raw.strip().lstrip("\ufeff").strip('"').strip("'")
+    return key or None
+
+
+def _format_gaps_for_prompt(gaps: list[dict[str, Any]]) -> str:
+    lines = []
+    for g in gaps:
+        skill = g.get("skill", "")
+        imp = g.get("importance", "")
+        zh = g.get("suggestion_zh", "")
+        en = g.get("suggestion_en", "")
+        lines.append(f"- {skill} ({imp}): {zh} | {en}")
+    return "\n".join(lines) if lines else "(none)"
+
+
+def _strip_json_fence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def _parse_llm_json(raw: str) -> dict[str, Any]:
+    cleaned = _strip_json_fence(raw)
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        start = cleaned.find("{")
+        if start == -1:
+            raise
+        try:
+            data, _ = json.JSONDecoder().raw_decode(cleaned[start:])
+        except json.JSONDecodeError:
+            match = re.search(r"\{[\s\S]*\}", cleaned)
+            if not match:
+                raise
+            data = json.loads(match.group(0))
+    if not isinstance(data, dict):
+        raise ValueError("LLM response is not a JSON object")
+    return data
+
+
+def generate_resume(
+    resume_text: str,
+    jd_text: str,
+    gaps: list[dict[str, Any]],
+    mode: Literal["smart_fill", "full_rewrite"],
+) -> dict[str, Any]:
+    """
+    Call Claude (claude-sonnet-4-20250514) and return
+    {"optimized_resume": str, "changes": list[{"original", "updated"}]}.
+
+    - smart_fill: keep structure; only add/adjust for gaps; mark additions with [NEW]...[NEW].
+    - full_rewrite: rewrite for maximum JD alignment while truthful; mark changes with [NEW]...[NEW].
+
+    Raises RuntimeError if API key missing, package missing, or Claude API fails.
+    """
+    _load_env()
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
+
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    system = SYSTEM_PROMPT_SMART_FILL if mode == "smart_fill" else SYSTEM_PROMPT_FULL_REWRITE
+    gaps_block = _format_gaps_for_prompt(gaps)
+
+    if mode == "smart_fill":
+        mode_instruction = """Mode: smart_fill
+- Preserve all original resume text that does not need changing.
+- Only add or lightly adjust content to address the listed gaps; keep section order and headings.
+- Wrap every new sentence, bullet, or edited phrase in paired markers: [NEW] ... [NEW] (opening [NEW] immediately before new/changed text, closing [NEW] immediately after)."""
+    else:
+        mode_instruction = """Mode: full_rewrite
+- Rewrite the full resume to maximize relevance to the job description (keywords, priorities, tone), without inventing facts.
+- You may reorder sections, merge bullets, and rewrite for impact; ground every claim in the original resume.
+- Wrap every new or materially rewritten span in paired [NEW] ... [NEW] markers."""
+
+    user_prompt = f"""Resume:
+{resume_text}
+
+Job Description:
+{jd_text}
+
+Skill gaps to address:
+{gaps_block}
+
+{mode_instruction}
+
+Return exactly one JSON object (UTF-8) with:
+- "optimized_resume": string — full resume text; all new or changed spans must use paired [NEW] delimiters as described.
+- "changes": array of objects {{ "original": string, "updated": string }} — concise pairs for each meaningful edit (use "" for "original" when inserting new lines).
+
+No markdown code fences. No text before or after the JSON object."""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=8192,
+            system=system,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        if _is_anthropic_error(e):
+            raise RuntimeError(f"Claude API error: {e}") from e
+        raise
+
+    raw_text = ""
+    for block in message.content:
+        if block.type == "text":
+            raw_text += block.text
+
+    if not raw_text.strip():
+        raise ValueError("Empty response from Claude")
+
+    data = _parse_llm_json(raw_text)
+    optimized = data.get("optimized_resume", "")
+    changes = data.get("changes", [])
+    if not isinstance(optimized, str):
+        raise ValueError("optimized_resume must be a string")
+    if not isinstance(changes, list):
+        changes = []
+
+    normalized_changes: list[dict[str, str]] = []
+    for item in changes:
+        if isinstance(item, dict):
+            original = item.get("original", "")
+            updated = item.get("updated", "")
+            if isinstance(original, str) and isinstance(updated, str):
+                normalized_changes.append({"original": original, "updated": updated})
+
+    return {
+        "optimized_resume": optimized,
+        "changes": normalized_changes,
+    }
