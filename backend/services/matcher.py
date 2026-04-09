@@ -191,6 +191,9 @@ class ResumeMatcher:
         if not resume_clean or not jd_clean:
             return 0.0
 
+        hf_token = os.environ.get("HF_TOKEN", "").strip()
+        print("Using HuggingFace API" if hf_token else "Using TF-IDF fallback")
+
         hf_score = ResumeMatcher._experience_score_hf(resume_clean, jd_clean)
         if hf_score is not None:
             return hf_score
