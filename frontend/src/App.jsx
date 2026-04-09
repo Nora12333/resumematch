@@ -27,6 +27,10 @@ export default function App() {
     }
     try {
       setError("");
+      // Always start a fresh analysis run.
+      setAnalysisResult(null);
+      setGeneratedResult(null);
+      setCurrentStep(1);
       setAnalyzing(true);
       const { data } = await axios.post(`${API_BASE}/api/analyze`, {
         resume_text: resumeText,
