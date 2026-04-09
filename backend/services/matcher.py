@@ -1,6 +1,8 @@
+import os
 import re
 from dataclasses import dataclass
 
+import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -32,6 +34,9 @@ DEFAULT_SKILL_LIST = {
     "data modeling",
     "statistics",
 }
+
+HF_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+HF_API_URL = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{HF_MODEL_ID}"
 
 
 def _normalize_text(text: str) -> str:
@@ -177,7 +182,7 @@ class ResumeMatcher:
 
     @staticmethod
     def _experience_score(resume_bullets: list[str], jd_requirements: list[str]) -> float:
-        """TF–IDF bag-of-words vectors + cosine similarity; mean of max sim per JD requirement."""
+        """HF embeddings (MiniLM) first; fallback to TF-IDF if API unavailable."""
         if not resume_bullets or not jd_requirements:
             return 0.0
 
@@ -186,6 +191,75 @@ class ResumeMatcher:
         if not resume_clean or not jd_clean:
             return 0.0
 
+        hf_score = ResumeMatcher._experience_score_hf(resume_clean, jd_clean)
+        if hf_score is not None:
+            return hf_score
+
+        return ResumeMatcher._experience_score_tfidf(resume_clean, jd_clean)
+
+    @staticmethod
+    def _experience_score_hf(resume_clean: list[str], jd_clean: list[str]) -> float | None:
+        token = os.environ.get("HF_TOKEN", "").strip()
+        if not token:
+            return None
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        all_texts = resume_clean + jd_clean
+        embeddings: list[list[float]] = []
+
+        try:
+            for text in all_texts:
+                response = requests.post(
+                    HF_API_URL,
+                    headers=headers,
+                    json={"inputs": text, "options": {"wait_for_model": True}},
+                    timeout=30,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if isinstance(payload, dict) and payload.get("error"):
+                    return None
+                if not isinstance(payload, list) or not payload:
+                    return None
+
+                # API can return token-level vectors; mean-pool if needed.
+                if isinstance(payload[0], list):
+                    if payload and payload[0] and isinstance(payload[0][0], list):
+                        token_vectors = payload
+                        dim = len(token_vectors[0][0])
+                        pooled = [0.0] * dim
+                        count = 0
+                        for token_vec in token_vectors:
+                            if token_vec and isinstance(token_vec[0], list):
+                                vec = token_vec[0]
+                                if len(vec) == dim:
+                                    pooled = [a + b for a, b in zip(pooled, vec)]
+                                    count += 1
+                        if count == 0:
+                            return None
+                        embeddings.append([v / count for v in pooled])
+                    else:
+                        embeddings.append([float(v) for v in payload[0]])
+                else:
+                    return None
+        except (requests.RequestException, ValueError, TypeError):
+            return None
+
+        n_r = len(resume_clean)
+        resume_vecs = embeddings[:n_r]
+        jd_vecs = embeddings[n_r:]
+        if not resume_vecs or not jd_vecs:
+            return None
+
+        sim_matrix = cosine_similarity(jd_vecs, resume_vecs)
+        top_per_req = sim_matrix.max(axis=1)
+        return float(top_per_req.mean() * 100.0)
+
+    @staticmethod
+    def _experience_score_tfidf(resume_clean: list[str], jd_clean: list[str]) -> float:
         vectorizer = TfidfVectorizer(
             lowercase=True,
             min_df=1,
