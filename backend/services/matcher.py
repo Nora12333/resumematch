@@ -1,4 +1,5 @@
 import os
+print("HF_TOKEN present:", bool(os.getenv("HF_TOKEN")))
 import re
 from dataclasses import dataclass
 
