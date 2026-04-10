@@ -222,3 +222,135 @@ No markdown code fences. No text before or after the JSON object."""
         "optimized_resume": optimized,
         "changes": normalized_changes,
     }
+def analyze_jd(jd_text: str) -> dict[str, Any]:
+    """
+    用 Claude 解析 JD，返回结构化 JSON。
+    """
+    _load_env()
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    user_prompt = f"""You are a structured job description parser.
+
+Analyze the job description below. Extract ONLY what is explicitly written.
+
+STRICT RULES:
+- must_have: Only truly non-negotiable requirements. "familiarity with" and "experience with" are usually preferred, not must-have. "should have", "we expect", "need" can be must-have if they are core to the role.
+- preferred: Requirements with "preferred", "plus", "nice to have", "bonus", "familiarity with", "experience with"
+- responsibilities: job duties listed in the JD, do not infer capabilities
+- explicit_skills: tool/skill names that literally appear in the text
+- inferred_capabilities: skills implied but not explicitly stated, mark as low confidence
+- domain: one of [Data Analytics, Data Engineering, Software Engineering, Product, Marketing, Finance, Other]
+- seniority: one of [intern, entry, mid, senior, lead, unknown]
+- location_requirement: exact location text or "remote" or "unknown"
+- authorization_required: true only if JD explicitly mentions work authorization requirement
+
+Return ONLY a valid JSON object, no markdown, no explanation:
+
+{{
+  "must_have": [],
+  "preferred": [],
+  "responsibilities": [],
+  "explicit_skills": [],
+  "inferred_capabilities": [],
+  "domain": "",
+  "seniority": "",
+  "location_requirement": "",
+  "authorization_required": false
+}}
+
+Job Description:
+{jd_text}"""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=1000,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        if _is_anthropic_error(e):
+            raise RuntimeError(f"Claude API error: {e}") from e
+        raise
+
+    raw_text = ""
+    for block in message.content:
+        if block.type == "text":
+            raw_text += block.text
+
+    return _parse_llm_json(raw_text)
+
+
+def analyze_resume(resume_text: str) -> dict[str, Any]:
+    """
+    用 Claude 解析简历，返回结构化 JSON。
+    """
+    _load_env()
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    user_prompt = f"""You are a structured resume parser.
+
+Parse the resume below into structured data.
+
+STRICT RULES:
+- Extract only what is explicitly written
+- bullets: extract each bullet point as a separate string
+- quantified_outcomes: only bullets that contain numbers or percentages
+- seniority_signals: action verbs that signal level (led, managed, designed, built, assisted, etc.)
+
+Return ONLY a valid JSON object, no markdown, no explanation:
+
+{{
+  "education": [
+    {{"school": "", "degree": "", "major": "", "year": ""}}
+  ],
+  "experience": [
+    {{
+      "company": "",
+      "title": "",
+      "duration": "",
+      "bullets": []
+    }}
+  ],
+  "projects": [
+    {{
+      "name": "",
+      "description": "",
+      "tools": []
+    }}
+  ],
+  "explicit_skills": [],
+  "quantified_outcomes": [],
+  "domains": [],
+  "seniority_signals": []
+}}
+
+Resume:
+{resume_text}"""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=2000,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        if _is_anthropic_error(e):
+            raise RuntimeError(f"Claude API error: {e}") from e
+        raise
+
+    raw_text = ""
+    for block in message.content:
+        if block.type == "text":
+            raw_text += block.text
+
+    return _parse_llm_json(raw_text)
