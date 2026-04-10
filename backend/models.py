@@ -10,7 +10,7 @@ class AnalyzeRequest(BaseModel):
 
 class GapItem(BaseModel):
     skill: str
-    importance: Literal["required", "nice_to_have", "covered"]
+    importance: Literal["required", "nice_to_have", "covered", "partial"]
     suggestion_zh: str
     suggestion_en: str
 
