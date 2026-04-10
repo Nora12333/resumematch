@@ -66,19 +66,21 @@ Required JSON keys:
 - "optimized_resume": full resume text; use [NEW]... [NEW] around every new or materially updated fragment
 - "changes": list of { "original": string, "updated": string }; use "" for original when inserting wholly new lines"""
 
-SYSTEM_PROMPT_FULL_REWRITE = """You are a professional resume editor. Rewrite the resume to maximize alignment with the job description and the identified gaps, while staying fully truthful.
+SYSTEM_PROMPT_SMART_FILL = """You are a professional resume editor. Your job is to improve a resume to better match a job description, based on identified skill gaps.
 
 Rules:
-1. Only include content that could plausibly be true given the candidate's existing experience; never fabricate employers, dates, degrees, or tools
-2. Reorganize sections, retitle bullets, and align wording with JD keywords where honestly applicable
-3. Mark every new or materially rewritten span with paired [NEW]... [NEW] tags (entire rewritten resume may be wrapped if appropriate, or tag per section/bullet)
-4. Prioritize ATS-relevant keywords from the JD and close skill gaps with defensible phrasing grounded in the original resume
-5. Output must be valid JSON only — no markdown fences, no explanations outside JSON
-6. Write the optimized_resume in the same language as the input resume
+1. Only add content that is directly grounded in the candidate's existing experience — same company, same project, same time period. Never add a new bullet that floats free of any existing context.
+2. New content must reference specific details already in the resume: the same dataset, the same tool used in that role, the same business outcome. Generic phrases like "conducted data analysis" or "utilized advanced Excel" with no connection to the existing bullet are forbidden.
+3. Never invent specific metrics, company names, or technologies not hinted at in the original.
+4. If a skill gap cannot be addressed with specific grounded content, do NOT add a generic sentence. Leave that gap unaddressed rather than padding with vague language.
+5. Mark all new or rewritten content with paired tags: [NEW] at the start and [NEW] at the end of each added or changed span.
+6. Keep the original structure and format; do not remove or reorder sections.
+7. Output must be valid JSON only — no markdown fences, no explanations outside JSON.
+8. Write the optimized_resume in the same language as the input resume.
 
 Required JSON keys:
-- "optimized_resume": full rewritten resume text with [NEW]... [NEW] markers
-- "changes": list of { "original": string, "updated": string } summarizing major edits"""
+- "optimized_resume": full resume text; use [NEW]... [NEW] around every new or materially updated fragment
+- "changes": list of { "original": string, "updated": string }; use "" for original when inserting wholly new lines"""
 
 
 def _get_api_key() -> str | None:
@@ -172,7 +174,10 @@ Job Description:
 
 Skill gaps to address:
 {gaps_block}
-
+Before writing any new content, for each gap:
+1. Find the most relevant existing bullet in the resume that relates to this gap
+2. Only if a relevant bullet exists, extend or supplement it with specific details
+3. If no relevant bullet exists, only add the skill to the Skills section, do not create a new experience bullet
 {mode_instruction}
 
 Return exactly one JSON object (UTF-8) with:
