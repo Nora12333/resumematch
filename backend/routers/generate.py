@@ -189,10 +189,10 @@ def _build_docx(optimized_resume: str, pages: int = 2) -> bytes:
             else:
                 add_runs(p, s, italic=True, size=body_size)
             continue
-
         if ("–" in s or " - " in s) and len(s) < 80:
             p = doc.add_paragraph()
-            p.paragraph_format.space_after = Pt(s         add_runs(p, s, italic=True, size=body_size)
+            p.paragraph_format.space_after = Pt(sp)
+            add_runs(p, s, italic=True, size=body_size)
             continue
 
         p = doc.add_paragraph()
