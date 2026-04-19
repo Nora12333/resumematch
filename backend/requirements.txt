@@ -9,4 +9,5 @@ python-multipart
 pydantic
 python-dotenv
 requests
-huggingface_hubpython-docx
+huggingface_hub
+python-docx
