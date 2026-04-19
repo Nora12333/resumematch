@@ -67,7 +67,7 @@ def generate_docx_endpoint(payload: GenerateRequest, pages: int = 2):
         mode=payload.mode,
     )
     optimized = result["optimized_resume"]
-    docx_bytes = build_resume_docx(optimized, pages=pages)
+    docx_bytes = _build_docx(optimized, pages=pages)
     return Response(
         content=docx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
