@@ -55,7 +55,6 @@ def generate_resume_endpoint(payload: GenerateRequest) -> GenerateResponse:
         raise HTTPException(status_code=502, detail=str(e)) from e
 from fastapi.responses import Response
 from models import GenerateRequest
-from services.docx_builder import build_resume_docx
 
 @router.post("/generate-docx")
 def generate_docx_endpoint(payload: GenerateRequest, pages: int = 2):
