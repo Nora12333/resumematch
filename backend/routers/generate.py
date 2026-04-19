@@ -99,13 +99,22 @@ def _build_docx(optimized_resume: str, pages: int = 2) -> bytes:
     sp = 1 if pages == 1 else 3
 
     def parse_segments(text):
-        parts = re.split(r'(\[NEW\][\s\S]*?\[NEW\])', text)
         result = []
-        for p in parts:
-            if re.match(r'^\[NEW\][\s\S]*\[NEW\]$', p):
-                result.append((p[5:-5], True))
-            elif p:
-                result.append((p, False))
+        remaining = text
+        while '[NEW]' in remaining:
+            start = remaining.find('[NEW]')
+            if start > 0:
+                result.append((remaining[:start], False))
+            remaining = remaining[start+5:]
+            end = remaining.find('[NEW]')
+            if end == -1:
+                result.append((remaining, False))
+                remaining = ''
+                break
+            result.append((remaining[:end], True))
+            remaining = remaining[end+5:]
+        if remaining:
+            result.append((remaining, False))
         return result
 
     def add_runs(para, text, bold=False, italic=False, size=10):
