@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import { useMemo, useState } from "react";
-
+const [pages, setPages] = useState(2);
 function renderNewMarkers(text) {
   const parts = text.split(/(\[NEW\][\s\S]*?\[NEW\])/g);
   return parts.map((part, idx) => {
@@ -28,12 +28,23 @@ export default function GenerateStep({ t, mode, setMode, generatedResult, onGene
     setTimeout(() => setCopied(false), 1200);
   };
 
-  const handleExportPdf = () => {
+  const handleDownloadDocx = async () => {
     if (!outputText) return;
-    const pdf = new jsPDF({ unit: "pt", format: "a4" });
-    const lines = pdf.splitTextToSize(outputText, 520);
-    pdf.text(lines, 40, 50);
-    pdf.save("optimized_resume.pdf");
+    
+    // 构造和 /generate 一样的 payload
+    const payload = { ...generatePayload, pages };  // 你需要把 generatePayload 从 App.jsx 传进来
+    
+    const res = await fetch(`/api/generate-docx?pages=${pages}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `optimized_resume_${pages}page.docx`;
+    a.click();
   };
 
   return (
