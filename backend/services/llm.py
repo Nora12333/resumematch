@@ -359,3 +359,56 @@ Resume:
             raw_text += block.text
 
     return _parse_llm_json(raw_text)
+
+def generate_resume_structured(
+    resume_text: str,
+    jd_text: str,
+    gaps: list[dict],
+    mode: str,
+) -> dict:
+    _load_env()
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    gaps_block = _format_gaps_for_prompt(gaps)
+    user_prompt = (
+        "You are a professional resume editor. Improve the resume to match the job description.\n\n"
+        "RULES:\n"
+        "1. Only add content grounded in existing experience.\n"
+        "2. Never invent metrics or technologies not in the original.\n"
+        "3. Mark ALL new/changed text with [NEW] before and [NEW] after.\n"
+        "4. Return ONLY valid JSON, no markdown fences.\n\n"
+        f"Resume:\n{resume_text}\n\n"
+        f"Job Description:\n{jd_text}\n\n"
+        f"Skill gaps:\n{gaps_block}\n\n"
+        "Return this exact JSON:\n"
+        "{\n"
+        '  \"name\": \"candidate full name\",\n'
+        '  \"contact\": \"City | email | phone\",\n'
+        '  \"education\": [{{\"school\":\"\",\"degree\":\"\",\"date\":\"\",\"coursework\":\"\"}}],\n'
+        '  \"experience\": [{{\"company\":\"\",\"location\":\"\",\"title\":\"\",\"date\":\"\",\"bullets\":[]}}],\n'
+        '  \"projects\": [{{\"name\":\"\",\"bullets\":[]}}],\n'
+        '  \"skills\": [{{\"label\":\"Programming & Tools\",\"content\":\"\"}}],\n'
+        '  \"changes\": [{{\"original\":\"\",\"updated\":\"\"}}]\n'
+        "}"
+    )
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        if _is_anthropic_error(e):
+            raise RuntimeError(f"Claude API error: {e}") from e
+        raise
+
+    raw_text = "".join(block.text for block in message.content if block.type == "text")
+    if not raw_text.strip():
+        raise ValueError("Empty response from Claude")
+    return _parse_llm_json(raw_text)
