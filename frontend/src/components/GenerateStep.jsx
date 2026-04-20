@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 
 function renderNewMarkers(text) {
-  const parts = text.split(/(\[NEW\][\s\S]*?\[\/NEW\])/g);
+  const parts = text.split(/(\[NEW\][\s\S]*?\[NEW\])/g);
   return parts.map((part, idx) => {
-    const marked = /^\[NEW\][\s\S]*\[\/NEW\]$/.test(part);
+    const marked = /^\[NEW\][\s\S]*\[NEW\]$/.test(part);
     if (!marked) return <span key={idx}>{part}</span>;
-    const cleaned = part.replace(/^\[NEW\]/, "").replace(/\[\/NEW\]$/, "");
+    const cleaned = part.replace(/^\[NEW\]/, "").replace(/\[NEW\]$/, "");
     return (
       <span key={idx} className="rounded bg-emerald-200 px-1">
         {cleaned}
