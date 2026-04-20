@@ -1,14 +1,19 @@
 import json
 import logging
-
+import re
 from fastapi import APIRouter, HTTPException
-
+from fastapi.responses import Response
+from io import BytesIO
+from docx import Document
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 from models import GenerateRequest, GenerateResponse
-from services.llm import generate_resume
+from services.llm import generate_resume, generate_resume_structured
 from services.matcher import ResumeMatcher
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api", tags=["generation"])
 
 
@@ -22,8 +27,6 @@ def generate_resume_endpoint(payload: GenerateRequest) -> GenerateResponse:
             gaps=gaps_dicts,
             mode=payload.mode,
         )
-
-        # 生成后自动对改写简历重新打分
         try:
             matcher = ResumeMatcher()
             score_after = matcher.analyze(
@@ -34,9 +37,7 @@ def generate_resume_endpoint(payload: GenerateRequest) -> GenerateResponse:
         except Exception as e:
             logger.warning(f"Re-scoring failed: {e}")
             result["score_after"] = None
-
         return GenerateResponse(**result)
-
     except RuntimeError as e:
         msg = str(e)
         if "ANTHROPIC_API_KEY" in msg or "not installed" in msg:
@@ -45,46 +46,73 @@ def generate_resume_endpoint(payload: GenerateRequest) -> GenerateResponse:
             raise HTTPException(status_code=502, detail=msg) from e
         raise HTTPException(status_code=500, detail=msg) from e
     except (json.JSONDecodeError, ValueError) as e:
-        logger.exception("LLM returned invalid JSON or schema")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Invalid response from language model: {e}",
-        ) from e
+        raise HTTPException(status_code=502, detail=f"Invalid response from language model: {e}") from e
     except Exception as e:
-        logger.exception("Claude API call failed")
         raise HTTPException(status_code=502, detail=str(e)) from e
-from fastapi.responses import Response
-from models import GenerateRequest
-
-@router.post("/generate-docx")
-def generate_docx_endpoint(payload: GenerateRequest, pages: int = 2):
-    """生成格式化 docx 文件并返回下载"""
-    gaps_dicts = [g.model_dump() for g in payload.gaps]
-    result = generate_resume(
-        resume_text=payload.resume_text,
-        jd_text=payload.jd_text,
-        gaps=gaps_dicts,
-        mode=payload.mode,
-    )
-    optimized = result["optimized_resume"]
-    docx_bytes = _build_docx(optimized, pages=pages)
-    return Response(
-        content=docx_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f"attachment; filename=optimized_resume_{pages}page.docx"}
-    )
-
-from fastapi.responses import Response
-from io import BytesIO
-import re
-from docx import Document
-from docx.shared import Pt, Inches
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 
 
-def _build_docx(optimized_resume: str, pages: int = 2) -> bytes:
+def _parse_segments(text):
+    result = []
+    remaining = text
+    while '[NEW]' in remaining:
+        start = remaining.find('[NEW]')
+        if start > 0:
+            result.append((remaining[:start], False))
+        remaining = remaining[start+5:]
+        end = remaining.find('[NEW]')
+        if end == -1:
+            result.append((remaining, False))
+            remaining = ''
+            break
+        result.append((remaining[:end], True))
+        remaining = remaining[end+5:]
+    if remaining:
+        result.append((remaining, False))
+    return result
+
+
+def _add_runs(para, text, bold=False, italic=False, size=10):
+    for seg, is_new in _parse_segments(text):
+        if not seg:
+            continue
+        run = para.add_run(seg)
+        run.bold = bold
+        run.italic = italic
+        run.font.size = Pt(size)
+        run.font.name = "Arial"
+        if is_new:
+            rPr = run._r.get_or_add_rPr()
+            hl = OxmlElement("w:highlight")
+            hl.set(qn("w:val"), "yellow")
+            rPr.append(hl)
+
+
+def _add_hr(doc):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(2)
+    pPr = p._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    bot = OxmlElement("w:bottom")
+    bot.set(qn("w:val"), "single")
+    bot.set(qn("w:sz"), "6")
+    bot.set(qn("w:space"), "1")
+    bot.set(qn("w:color"), "000000")
+    pBdr.append(bot)
+    pPr.append(pBdr)
+
+
+def _add_right_tab(p, content_w=9360):
+    pPr = p._p.get_or_add_pPr()
+    tabs = OxmlElement("w:tabs")
+    tab = OxmlElement("w:tab")
+    tab.set(qn("w:val"), "right")
+    tab.set(qn("w:pos"), str(content_w))
+    tabs.append(tab)
+    pPr.append(tabs)
+
+
+def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
     doc = Document()
     section = doc.sections[0]
     section.page_width = Inches(8.5)
@@ -95,117 +123,135 @@ def _build_docx(optimized_resume: str, pages: int = 2) -> bytes:
 
     body_size = 9 if pages == 1 else 10
     name_size = 14 if pages == 1 else 16
-    sec_size  = 10 if pages == 1 else 11
+    sec_size = 10 if pages == 1 else 11
     sp = 1 if pages == 1 else 3
+    content_w = 9360 if pages == 2 else 9072
 
-    def parse_segments(text):
-        result = []
-        remaining = text
-        while '[NEW]' in remaining:
-            start = remaining.find('[NEW]')
-            if start > 0:
-                result.append((remaining[:start], False))
-            remaining = remaining[start+5:]
-            end = remaining.find('[NEW]')
-            if end == -1:
-                result.append((remaining, False))
-                remaining = ''
-                break
-            result.append((remaining[:end], True))
-            remaining = remaining[end+5:]
-        if remaining:
-            result.append((remaining, False))
-        return result
+    # Name
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after = Pt(2)
+    _add_runs(p, data.get("name", ""), bold=True, size=name_size)
 
-    def add_runs(para, text, bold=False, italic=False, size=10):
-        for seg, is_new in parse_segments(text):
-            run = para.add_run(seg)
-            run.bold = bold
-            run.italic = italic
-            run.font.size = Pt(size)
-            run.font.name = "Arial"
-            if is_new:
-                rPr = run._r.get_or_add_rPr()
-                hl = OxmlElement("w:highlight")
-                hl.set(qn("w:val"), "yellow")
-                rPr.append(hl)
+    # Contact
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after = Pt(sp)
+    _add_runs(p, data.get("contact", ""), size=body_size)
 
-    def add_hr():
+    # EDUCATION
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(0)
+    _add_runs(p, "EDUCATION", bold=True, size=sec_size)
+    _add_hr(doc)
+
+    for edu in data.get("education", []):
         p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(0)
-        p.paragraph_format.space_after = Pt(2)
-        pPr = p._p.get_or_add_pPr()
-        pBdr = OxmlElement("w:pBdr")
-        bot = OxmlElement("w:bottom")
-        bot.set(qn("w:val"), "single")
-        bot.set(qn("w:sz"), "6")
-        bot.set(qn("w:space"), "1")
-        bot.set(qn("w:color"), "000000")
-        pBdr.append(bot)
-        pPr.append(pBdr)
+        p.paragraph_format.space_after = Pt(0)
+        run = p.add_run(edu.get("school", ""))
+        run.bold = True
+        run.font.size = Pt(body_size)
+        run.font.name = "Arial"
 
-    SECTION_KEYWORDS = {"EDUCATION","EXPERIENCE","PROJECTS","SKILLS","SUMMARY","教育","经历","技能","项目"}
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(0)
+        _add_right_tab(p, content_w)
+        run = p.add_run(edu.get("degree", ""))
+        run.italic = True
+        run.font.size = Pt(body_size)
+        run.font.name = "Arial"
+        run2 = p.add_run("\t" + edu.get("date", ""))
+        run2.italic = True
+        run2.font.size = Pt(body_size)
+        run2.font.name = "Arial"
 
-    lines = optimized_resume.split("\n")
-    first_nonempty = True
-
-    for raw in lines:
-        s = raw.strip()
-        if not s:
-            continue
-
-        if first_nonempty:
-            first_nonempty = False
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_after = Pt(2)
-            add_runs(p, s, bold=True, size=name_size)
-            continue
-
-        if "|" in s or "@" in s:
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_after = Pt(sp)
-            add_runs(p, s, size=body_size)
-            continue
-
-        clean = re.sub(r'\[NEW\]', '', s).strip()
-        if clean.upper() in SECTION_KEYWORDS:
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(6)
-            p.papace_after = Pt(0)
-            add_runs(p, s, bold=True, size=sec_size)
-            add_hr()
-            continue
-
-        if s.startswith("•") or s.startswith("-"):
-            p = doc.add_paragraph(style="List Bullet")
-            p.paragraph_format.space_after = Pt(sp)
-            add_runs(p, re.sub(r'^[•\-]\s*', '', s), size=body_size)
-            continue
-
-        if s.startswith("Relevant Coursework"):
+        if edu.get("coursework"):
             p = doc.add_paragraph()
             p.paragraph_format.space_after = Pt(sp)
-            if ":" in s:
-                label, rest = s.split(":", 1)
-                r = p.add_run(label + ":")
-                r.italic = True
-                r.font.size = Pt(body_size)
-                r.font.name = "Arial"
-                add_runs(p, rest, size=body_size)
-            else:
-                add_runs(p, s, italic=True, size=body_size)
-            continue
-        if ("–" in s or " - " in s) and len(s) < 80:
-            p = doc.add_paragraph()
-            p.paragraph_format.space_after = Pt(sp)
-            add_runs(p, s, italic=True, size=body_size)
-            continue
+            r = p.add_run("Relevant Coursework: ")
+            r.italic = True
+            r.font.size = Pt(body_size)
+            r.font.name = "Arial"
+            _add_runs(p, edu["coursework"], size=body_size)
+
+    # EXPERIENCE
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(0)
+    _add_runs(p, "EXPERIENCE", bold=True, size=sec_size)
+    _add_hr(doc)
+
+    for exp in data.get("experience", []):
+        org = exp.get("company", "")
+        if exp.get("location"):
+            org += f", {exp['location']}"
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(0)
+        _add_runs(p, org, bold=True, size=body_size)
 
         p = doc.add_paragraph()
         p.paragraph_format.space_after = Pt(sp)
-        add_runs(p, s, bold=True, size=body_size)
+        _add_right_tab(p, content_w)
+        run = p.add_run(exp.get("title", ""))
+        run.italic = True
+        run.font.size = Pt(body_size)
+        run.font.name = "Arial"
+        run2 = p.add_run("\t" + exp.get("date", ""))
+        run2.italic = True
+        run2.font.size = Pt(body_size)
+        run2.font.name = "Arial"
+
+        for bullet in exp.get("bullets", []):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(sp)
+            p.paragraph_format.left_indent = Inches(0.15)
+            run = p.add_run("• ")
+            run.font.size = Pt(body_size)
+            run.font.name = "Arial"
+            _add_ru(p, bullet, size=body_size)
+
+    # PROJECTS
+    if data.get("projects"):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_format.space_after = Pt(0)
+        _add_runs(p, "PROJECTS", bold=True, size=sec_size)
+        _add_hr(doc)
+
+        for proj in data.get("projects", []):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(sp)
+            _add_runs(p, proj.get("name", ""), bold=True, size=body_size)
+            for bullet in proj.get("bullets", []):
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(sp)
+                p.paragraph_format.left_indent = Inches(0.15)
+                run = p.add_run("• ")
+                run.font.size = Pt(body_size)
+                run.font.name = "Arial"
+                _add_runs(p, bullet, size=body_size)
+
+    # SKILLS
+    if data.get("skills"):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_form.space_after = Pt(0)
+        _add_runs(p, "SKILLS", bold=True, size=sec_size)
+        _add_hr(doc)
+
+        for skill in data.get("skills", []):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(sp)
+            p.paragraph_format.left_indent = Inches(0.15)
+            run = p.add_run("• ")
+            run.font.size = Pt(body_size)
+            run.font.name = "Arial"
+            r = p.add_run(skill.get("label", "") + ":  ")
+            r.bold = True
+            r.font.size = Pt(body_size)
+            r.font.name = "Arial"
+            _add_runs(p, skill.get("content", ""), size=body_size)
 
     buf = BytesIO()
     doc.save(buf)
@@ -216,13 +262,12 @@ def _build_docx(optimized_resume: str, pages: int = 2) -> bytes:
 def generate_docx_endpoint(payload: GenerateRequest, pages: int = 2):
     gaps_dicts = [g.model_dump() for g in payload.gaps]
     try:
-        result = generate_resume(
+        structured = generate_resume_structured(
             resume_text=payload.resume_text,
             jd_text=payload.jd_text,
-            gaps=gaps_dicts,
-            mode=payload.mode,
+            gaps=gaps_dicts,           mode=payload.mode,
         )
-        docx_bytes = _build_docx(result["optimized_resume"], pages=pages)
+        docx_bytes = _build_docx_structured(structured, pages=pages)
         return Response(
             content=docx_bytes,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
