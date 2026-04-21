@@ -80,11 +80,6 @@ def _add_runs(para, text, bold=False, italic=False, size=10):
         run.italic = italic
         run.font.size = Pt(size)
         run.font.name = "Arial"
-        if is_new:
-            rPr = run._r.get_or_add_rPr()
-            hl = OxmlElement("w:highlight")
-            hl.set(qn("w:val"), "yellow")
-            rPr.append(hl)
 
 
 def _add_hr(doc):
@@ -112,7 +107,7 @@ def _add_right_tab(p, content_w=9360):
     pPr.append(tabs)
 
 
-def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
+def _build_docx_structured(data: dict, pages: int = 1) -> bytes:
     doc = Document()
     section = doc.sections[0]
     section.page_width = Inches(8.5)
