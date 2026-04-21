@@ -284,7 +284,8 @@ def generate_docx_endpoint(payload: GenerateRequest, pages: int = 2):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-class StructuredDocxRequest(_BaseModel):
+from pydantic import BaseModel
+class StructuredDocxRequest(BaseModel):
     structured: dict
     pages: int = 1
 
