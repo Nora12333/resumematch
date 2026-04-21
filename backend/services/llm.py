@@ -359,13 +359,12 @@ Resume:
             raw_text += block.text
 
     return _parse_llm_json(raw_text)
-
 def generate_resume_structured(
     resume_text: str,
     jd_text: str,
-    gaps: list[dict],
-    mode: str,
-) -> dict:
+    gaps: list[dict[str, Any]],
+    mode: Literal["smart_fill", "full_rewrite"],
+) -> dict[str, Any]:
     _load_env()
     if anthropic is None:
         raise RuntimeError("anthropic package is not installed")
@@ -374,41 +373,238 @@ def generate_resume_structured(
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     gaps_block = _format_gaps_for_prompt(gaps)
-    user_prompt = (
-        "You are a professional resume editor. Improve the resume to match the job description.\n\n"
-        "RULES:\n"
-        "1. Only add content grounded in existing experience.\n"
-        "2. Never invent metrics or technologies not in the original.\n"
-        "3. Mark ALL new/changed text with [NEW] before and [NEW] after.\n"
-        "4. Return ONLY valid JSON, no markdown fences.\n\n"
-        f"Resume:\n{resume_text}\n\n"
-        f"Job Description:\n{jd_text}\n\n"
-        f"Skill gaps:\n{gaps_block}\n\n"
-        "Return this exact JSON:\n"
-        "{\n"
-        '  \"name\": \"candidate full name\",\n'
-        '  \"contact\": \"City | email | phone\",\n'
-        '  \"education\": [{{\"school\":\"\",\"degree\":\"\",\"date\":\"\",\"coursework\":\"\"}}],\n'
-        '  \"experience\": [{{\"company\":\"\",\"location\":\"\",\"title\":\"\",\"date\":\"\",\"bullets\":[]}}],\n'
-        '  \"projects\": [{{\"name\":\"\",\"bullets\":[]}}],\n'
-        '  \"skills\": [{{\"label\":\"Programming & Tools\",\"content\":\"\"}}],\n'
-        '  \"changes\": [{{\"original\":\"\",\"updated\":\"\"}}]\n'
-        "}"
-    )
+
+    user_prompt = f"""You are a professional resume editor. Improve the resume below to better match the job description.
+
+RULES:
+1. Only add content grounded in the candidate's existing experience.
+2. Never invent metrics, company names, or technologies not in the original.
+3. Mark ALL new or changed text with [NEW] before and [NEW] after.
+4. Return ONLY valid JSON, no markdown fences.
+
+Resume:
+{resume_text}
+
+Job Description:
+{jd_text}
+
+Skill gaps to address:
+{gaps_block}
+
+Return this exact JSON structure:
+{{
+  "name": "candidate full name",
+  "contact": "contact line e.g. City | email | phone",
+  "education": [
+    {{
+      "school": "",
+      "degree": "",
+      "date": "",
+      "coursework": ""
+    }}
+  ],
+  "experience": [
+    {{
+      "company": "",
+      "location": "",
+      "title": "",
+      "date": "",
+      "bullets": ["bullet text, use [NEW]...[NEW] for new/changed parts"]
+    }}
+  ],
+  "projects": [
+    {{
+      "name": "",
+      "bullets": ["bullet text"]
+    }}
+  ],
+  "skills": [
+    {{
+      "label": "Programming & Tools",
+      "content": "skill list, use [NEW]...[NEW] for new parts"
+    }}
+  ],
+  "changes": [
+    {{"original": "", "updated": ""}}
+  ]
+}}"""
 
     client = anthropic.Anthropic(api_key=api_key)
-    try:
-        message = client.messages.create(
-            model=MODEL_ID,
-            max_tokens=8192,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-    except Exception as e:
-        if _is_anthropic_error(e):
-            raise RuntimeError(f"Claude API error: {e}") from e
-        raise
+    message = client.messages.create(
+        model=MODEL_ID,
+        max_tokens=8192,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
 
     raw_text = "".join(block.text for block in message.content if block.type == "text")
     if not raw_text.strip():
         raise ValueError("Empty response from Claude")
-    return _parse_llm_json(raw_text)
+
+    data = _parse_llm_json(raw_text)
+    return data
+def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
+    doc = Document()
+    section = doc.sections[0]
+    section.page_width = Inches(8.5)
+    section.page_height = Inches(11)
+    margin = Inches(0.6) if pages == 1 else Inches(0.75)
+    section.top_margin = section.bottom_margin = margin
+    section.left_margin = section.right_margin = margin
+
+    body_size = 9 if pages == 1 else 10
+    name_size = 14 if pages == 1 else 16
+    sec_size = 10 if pages == 1 else 11
+    sp = 1 if pages == 1 else 3
+
+    # Name
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after = Pt(2)
+    _add_runs(p, data.get("name", ""), bold=True, size=name_size)
+
+    # Contact
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after = Pt(sp)
+    _add_runs(p, data.get("contact", ""), size=body_size)
+
+    # Education
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(0)
+    _add_runs(p, "EDUCATION", bold=True, size=sec_size)
+    _add_hr(doc)
+
+    for edu in data.get("education", []):
+        # School name (bold, left) + date (right)
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(0)
+        pPr = p._p.get_or_add_pPr()
+        tabs = OxmlElement("w:tabs")
+        tab = OxmlElement("w:tab")
+        tab.set(qn("w:val"), "right")
+        tab.set(qn("w:pos"), "9360")
+        tabs.append(tab)
+        pPr.append(tabs)
+        run = p.add_run(edu.get("school", ""))
+        run.bold = True
+        run.font.size = Pt(body_size)
+        run.font.name = "Arial"
+
+        # Degree (italic) + date
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(0)
+        pPr = p._p.get_or_add_pPr()
+        tabs = OxmlElement("w:tabs")
+        tab = OxmlElement("w:tab")
+        tab.set(qn("w:val"), "right")
+        tab.set(qn("w:pos"), "9360")
+        tabs.append(tab)
+        pPr.append(tabs)
+        run = p.add_run(edu.get("degree", ""))
+        run.italic = True
+        run.font.size = Pt(body_size)
+        run.font.name = "Arial"
+        run2 = p.add_run("\t" + edu.get("date", ""))
+        run2.italic = True
+        run2.font.size = Pt(body_size)
+        run2.font.name = "Arial"
+
+        if edu.get("coursework"):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(sp)
+            r = p.add_run("Relevant Coursework: ")
+            r.italic = True
+            r.font.size = Pt(body_size)
+            r.font.name = "Arial"
+            _add_runs(p, edu["coursework"], size=body_size)
+
+    # Experience
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(0)
+    _add_runs(p, "EXPERIENCE", bold=True, size=sec_size)
+    _add_hr(doc)
+
+    for exp in data.get("experience", []):
+        # Company + location
+        org = exp.get("company", "")
+        if exp.get("location"):
+            org += f", {exp['location']}"
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(0)
+        _add_runs(p, org, bold=True, size=body_size)
+
+        # Title + date
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(sp)
+        pPr = p._p.get_or_add_pPr()
+        tabs = OxmlElement("w:tabs")
+        tab = OxmlElement("w:tab")
+        tab.set(qn("w:val"), "right")
+        tab.set(qn("w:pos"), "9360")
+        tabs.append(tab)
+        pPr.append(tabs)
+        run = p.add_run(exp.get("title", ""))
+        run.italic = True
+        run.font.size = Pt(body_size)
+        run.font.name = "Arial"
+        run2 = p.add_run("\t" + exp.get("date", ""))
+        run2.italic = True
+        run2.font.size = Pt(body_size)
+        run2.font.name = "Arial"
+
+        for bullet in exp.get("bullets", []):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(sp)
+            p.paragraph_format.left_indent = Inches(0.15)
+            run = p.add_run("• ")
+            run.font.size = Pt(body_size)
+            run.font.name = "Arial"
+            _add_runs(p, bullet, size=body_size)
+
+    # Projects
+    if data.get("projects"):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_format.space_after = Pt(0)
+        _add_runs(p, "PROJECTS", bold=True, size=sec_size)
+        _add_hr(doc)
+
+        for proj in data.get("projects", []):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(sp)
+            _add_runs(p, proj.get("name", ""), bold=True, size=body_size)
+            for bullet in proj.get("bullets", []):
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(sp)
+                p.paragraph_format.left_indent = Inches(0.15)
+                run = p.add_run("• ")
+                run.font.size = Pt(body_size)
+                run.font.name = "Arial"
+                _add_runs(p, bullet, size=body_size)
+
+    # Skills
+    if data.get("skills"):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_format.space_after = Pt(0)
+        _add_runs(p, "SKILLS", bold=True, size=sec_size)
+        _add_hr(doc)
+
+        for skill in data.get("skills", []):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(sp)
+            p.paragraph_format.left_indent = Inches(0.15)
+            run = p.add_run("• ")
+            run.font.size = Pt(body_size)
+            run.font.name = "Arial"
+            r = p.add_run(skill.get("label", "") + ": ")
+            r.bold = True
+            r.font.size = Pt(body_size)
+            r.font.name = "Arial"
+            _add_runs(p, skill.get("content", ""), size=body_size)
+
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
