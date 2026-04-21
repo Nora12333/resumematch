@@ -38,13 +38,18 @@ export default function GenerateStep({
       const res = await fetch(`${apiBase}/api/generate-docx?pages=${pages}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume_text: resumeText, jd_text: jdText, gaps, mode }),
+        body: JSON.stringify({
+          resume_text: resumeText,
+          jd_text: jdText,
+          gaps: gaps,
+          mode: mode,
+        }),
       });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `optimized_resume_${pages}page.docx`;
+      a.download = `optimized_resume.docx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
