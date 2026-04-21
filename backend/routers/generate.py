@@ -236,7 +236,7 @@ def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
     if data.get("skills"):
         p = doc.add_paragraph()
         p.paragraph_format.space_before = Pt(6)
-        p.paragraph_form.space_after = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
         _add_runs(p, "SKILLS", bold=True, size=sec_size)
         _add_hr(doc)
 
