@@ -81,17 +81,47 @@ export default function GenerateStep({
           className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-300">
           {copied ? t.copied : t.copy}
         </button>
-        <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1">
-          <span className="text-xs text-slate-500 mr-1">页数:</span>
-          <button type="button" onClick={() => setPages(1)}
-            className={`px-2 py-1 rounded text-xs font-medium ${pages === 1 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-            1页
-          </button>
-          <button type="button" onClick={() => setPages(2)}
-            className={`px-2 py-1 rounded text-xs font-medium ${pages === 2 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-            2页
-          </button>
+        <div className="flex items-center gap-2">
+  <span className="text-xs text-slate-500">页数:</span>
+  <div
+    className="relative h-16 w-10 overflow-hidden rounded-lg border border-slate-300 bg-white cursor-pointer select-none"
+    onWheel={(e) => {
+      e.preventDefault();
+      setPages(p => Math.min(3, Math.max(1, p + (e.deltaY > 0 ? 1 : -1))));
+    }}
+  >
+    {[1, 2, 3].map((n) => {
+      const diff = n - pages;
+      return (
+        <div
+          key={n}
+          onClick={() => setPages(n)}
+          style={{
+            position: 'absolute',
+            left: 0, right: 0,
+            top: `calc(50% + ${diff * 100}% - 12px)`,
+            textAlign: 'center',
+            fontSize: diff === 0 ? '16px' : '11px',
+            fontWeight: diff === 0 ? '700' : '400',
+            color: diff === 0 ? '#2563eb' : '#94a3b8',
+            opacity: diff === 0 ? 1 : 0.5,
+            transition: 'all 0.2s ease',
+            lineHeight: '24px',
+          }}
+        >
+          {n}
         </div>
+      );
+    })}
+    <div style={{
+      position: 'absolute', left: 4, right: 4,
+      top: 'calc(50% - 14px)', height: 28,
+      borderTop: '1px solid #e2e8f0',
+      borderBottom: '1px solid #e2e8f0',
+      pointerEvents: 'none',
+    }} />
+  </div>
+</div>
         <button type="button" onClick={handleDownloadDocx}
           disabled={!outputText || downloading}
           className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hovere-300 disabled:opacity-50">
