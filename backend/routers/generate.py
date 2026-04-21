@@ -37,6 +37,18 @@ def generate_resume_endpoint(payload: GenerateRequest) -> GenerateResponse:
         except Exception as e:
             logger.warning(f"Re-scoring failed: {e}")
             result["score_after"] = None
+        # Also generate structured data for docx download
+        try:
+            structured = generate_resume_structured(
+                resume_text=payload.resume_text,
+                jd_text=payload.jd_text,
+                gaps=gaps_dicts,
+                mode=payload.mode,
+            )
+            result["structured"] = structured
+        except Exception as e:
+            logger.warning(f"Structured generation failed: {e}")
+            result["structured"] = None
         return GenerateResponse(**result)
     except RuntimeError as e:
         msg = str(e)
@@ -267,6 +279,23 @@ def generate_docx_endpoint(payload: GenerateRequest, pages: int = 2):
             content=docx_bytes,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             headers={"Content-Disposition": f"attachment; filename=optimized_resume_{pages}page.docx"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+class StructuredDocxRequest(_BaseModel):
+    structured: dict
+    pages: int = 1
+
+@router.post("/download-docx")  
+def download_docx_from_structured(payload: StructuredDocxRequest):
+    try:
+        docx_bytes = _build_docx_structured(payload.structured, pages=payload.pages)
+        return Response(
+            content=docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": "attachment; filename=optimized_resume.docx"},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
