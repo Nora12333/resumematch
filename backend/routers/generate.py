@@ -209,7 +209,7 @@ def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
             run = p.add_run("• ")
             run.font.size = Pt(body_size)
             run.font.name = "Arial"
-            _add_ru(p, bullet, size=body_size)
+            _add_runs(p, bullet, size=body_size)
 
     # PROJECTS
     if data.get("projects"):
