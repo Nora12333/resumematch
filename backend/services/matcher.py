@@ -1,14 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv("backend/.env", override=True)
-import re
-
 
 from services.llm import analyze_jd, analyze_resume, score_experience, score_skills
-
-
-
-def _normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text.lower()).strip()
 
 
 class ResumeMatcher:
@@ -21,7 +14,7 @@ class ResumeMatcher:
         eligibility = self._check_eligibility(jd_parsed, resume_parsed)
 
         # 第三步：技能覆盖分析
-        skill_results = self._analyze_skills(jd_parsed, resume_parsed, resume_text)
+        skill_results = self._analyze_skills(jd_parsed, resume_parsed)
 
         # 第四步：经历对齐（细粒度矩阵）
         experience_score = self._experience_score_matrix(
@@ -62,42 +55,50 @@ class ResumeMatcher:
 
         return results
 
-    def _analyze_skills(
-        self, jd_parsed: dict, resume_parsed: dict, resume_text: str
-    ) -> dict:
-        resume_lower = _normalize_text(resume_text)
-        resume_skills = {s.lower() for s in resume_parsed.get("explicit_skills", [])}
-
+    def _analyze_skills(self, jd_parsed: dict, resume_parsed: dict) -> dict:
         must_have = jd_parsed.get("must_have", [])
         preferred = jd_parsed.get("preferred", [])
         explicit_skills = jd_parsed.get("explicit_skills", [])
 
+        resume_skill_list = [
+            s.strip()
+            for s in resume_parsed.get("explicit_skills", [])
+            if isinstance(s, str) and s.strip()
+        ]
+        jd_skill_list = [
+            s.strip()
+            for s in explicit_skills
+            if isinstance(s, str) and s.strip()
+        ]
+
+        if not jd_skill_list:
+            return {
+                "skill_score": 0,
+                "skill_status": [],
+                "keywords": [],
+            }
+
+        llm_matches = score_skills(resume_skill_list, jd_skill_list)
+
         skill_status = []
-        matched_count = 0
-        total_count = len(explicit_skills)
+        matched_count = 0.0
+        total_count = len(jd_skill_list)
 
-        for skill in explicit_skills:
+        for item in llm_matches:
+            skill = item["skill"]
+            raw = item.get("status", "missing")
             skill_lower = skill.lower()
-            in_resume = skill_lower in resume_lower or skill_lower in resume_skills
-
-            # 判断重要性
             is_must = any(skill_lower in r.lower() for r in must_have)
             is_preferred = any(skill_lower in r.lower() for r in preferred)
 
-            if in_resume:
+            if raw == "covered":
                 status = "covered"
-                matched_count += 1
+                matched_count += 1.0
+            elif raw == "partial":
+                status = "partial"
+                matched_count += 0.5
             else:
-                # 检查语义相近（简单：查 resume_skills 有无相关词）
-                partial = any(
-                    skill_lower in s or s in skill_lower
-                    for s in resume_skills
-                )
-                if partial:
-                    status = "partial"
-                    matched_count += 0.5
-                else:
-                    status = "missing_required" if is_must else "missing_optional"
+                status = "missing_required" if is_must else "missing_optional"
 
             skill_status.append({
                 "skill": skill,
@@ -106,7 +107,7 @@ class ResumeMatcher:
                 "is_preferred": is_preferred,
             })
 
-        skill_score = int((matched_count / total_count * 100)) if total_count > 0 else 0
+        skill_score = int(round(matched_count / total_count * 100)) if total_count > 0 else 0
 
         keywords = [
             {"word": s["skill"], "matched": s["status"] == "covered"}

@@ -252,23 +252,34 @@ The "matches" array MUST have exactly {len(clean_jd)} objects, same order as the
     if not isinstance(matches, list):
         raise ValueError("Claude skill response missing 'matches' array")
 
-    out: list[dict[str, str]] = []
     valid_status = frozenset({"covered", "partial", "missing"})
+    lookup: dict[str, str] = {}
+    for row in matches:
+        if not isinstance(row, dict):
+            continue
+        key = row.get("jd_skill")
+        if not isinstance(key, str) or not key.strip():
+            continue
+        st = row.get("status", "missing")
+        norm = st.strip().lower() if isinstance(st, str) else "missing"
+        if norm not in valid_status:
+            norm = "missing"
+        lookup[key.strip().lower()] = norm
+
+    out: list[dict[str, str]] = []
     for i, jd in enumerate(clean_jd):
         status = "missing"
         if i < len(matches) and isinstance(matches[i], dict):
             row = matches[i]
-            raw_skill = row.get("jd_skill", jd)
-            jd_skill = raw_skill.strip() if isinstance(raw_skill, str) else jd
-            if jd_skill != jd:
-                jd_skill = jd
-            st = row.get("status", "missing")
-            if isinstance(st, str) and st.strip().lower() in valid_status:
-                status = st.strip().lower()
+            row_jd = row.get("jd_skill", "")
+            row_jd_norm = row_jd.strip().lower() if isinstance(row_jd, str) else ""
+            if row_jd_norm == jd.lower():
+                st = row.get("status", "missing")
+                if isinstance(st, str) and st.strip().lower() in valid_status:
+                    status = st.strip().lower()
+        if status == "missing" and jd.lower() in lookup:
+            status = lookup[jd.lower()]
         out.append({"skill": jd, "status": status})
-
-    if len(out) != len(clean_jd):
-        raise ValueError("Claude returned wrong number of skill matches")
 
     return out
 
