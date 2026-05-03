@@ -192,6 +192,10 @@ def score_skills(
 
     Returns a list aligned with ``jd_skills`` (same length, same order):
     ``[{"skill": <jd skill>, "status": "covered"|"partial"|"missing"}, ...]``.
+
+    ``covered`` requires an explicit mention of that tool/skill (or unambiguous
+    same-name variant) on the resume skill list; broader semantic overlap is
+    ``partial`` only.
     """
     _load_env()
     if anthropic is None:
@@ -209,18 +213,19 @@ def score_skills(
 
     resume_block = "\n".join(f"- {s}" for s in clean_resume) or "(none listed)"
     jd_block = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(clean_jd))
-    user_prompt = f"""You compare job-required skills against skills shown on a resume.
+    user_prompt = f"""You compare each JD skill against the resume's explicit skill list only.
 
-Resume skills (explicit list only):
+Resume skills (explicit list only — this is the only evidence you may use):
 {resume_block}
 
-JD skills to evaluate (evaluate EVERY item below, in order, use the exact jd_skill string from the list):
+JD skills to evaluate (evaluate EVERY item below, in order; jd_skill must be the exact string from the list):
 {jd_block}
 
-Rules:
-- covered: the resume clearly demonstrates this skill or a direct equivalent (e.g. PostgreSQL covers "SQL", Tableau can cover "data visualization tools" if resume lists Tableau or strong viz tooling).
-- partial: related but weaker or indirect (e.g. Excel only when JD asks for "Python"; similar domain but not the same capability).
-- missing: no reasonable evidence in the resume skill list.
+Strict rules — apply independently to EACH jd_skill; do not infer from "overall strong candidate":
+1) covered: ONLY if the resume skill list explicitly names this tool/skill (or a standard same-thing alias, e.g. "JS" when the JD asks "JavaScript", "K8s" for "Kubernetes"). The name or alias must clearly refer to the same capability. Generic phrases alone are NOT enough.
+2) partial: the resume lists something semantically related or in the same family, but it is NOT the same tool/skill as named in the JD. Example: JD asks for "data visualization tools" and the resume lists "Tableau" → partial (related domain, not an exact match to the JD wording). Another example: JD asks "Python" and resume lists "R" → partial if you judge same broad analytics stack but not the requested tool.
+3) missing: the resume skill list does not mention this skill and nothing in the list reasonably maps to partial per rule 2.
+4) No halo effect: never upgrade a skill because the candidate looks generally senior or the list is long. Judge each jd_skill in isolation. When unsure between covered and partial, choose partial; when unsure between partial and missing, choose missing.
 
 Return ONLY valid JSON, no markdown:
 {{
