@@ -129,6 +129,60 @@ def _parse_llm_json(raw: str) -> dict[str, Any]:
     return data
 
 
+def score_experience(resume_bullets: list[str], jd_requirements: list[str]) -> float:
+    """
+    Ask Claude to score resume experience match against JD requirements.
+    Returns a numeric score in [0, 100].
+    """
+    _load_env()
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    clean_bullets = [b.strip() for b in resume_bullets if isinstance(b, str) and b.strip()]
+    clean_requirements = [r.strip() for r in jd_requirements if isinstance(r, str) and r.strip()]
+    if not clean_bullets or not clean_requirements:
+        return 0.0
+
+    bullets_block = "\n".join(f"- {b}" for b in clean_bullets)
+    reqs_block = "\n".join(f"- {r}" for r in clean_requirements)
+    user_prompt = f"""You are scoring resume-to-JD experience alignment.
+
+Evaluate how well the candidate's experience bullets match the job requirements.
+Return ONLY one integer from 0 to 100 (no JSON, no explanation).
+
+Resume bullets:
+{bullets_block}
+
+Job requirements:
+{reqs_block}
+"""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=32,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        if _is_anthropic_error(e):
+            raise RuntimeError(f"Claude API error: {e}") from e
+        raise
+
+    raw_text = "".join(block.text for block in message.content if block.type == "text").strip()
+    if not raw_text:
+        raise ValueError("Empty response from Claude while scoring experience")
+
+    match = re.search(r"\d+", raw_text)
+    if not match:
+        raise ValueError(f"Claude did not return a numeric score: {raw_text}")
+    score = int(match.group(0))
+    return float(max(0, min(100, score)))
+
+
 def generate_resume(
     resume_text: str,
     jd_text: str,

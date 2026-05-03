@@ -1,40 +1,14 @@
-import os
 from dotenv import load_dotenv
 load_dotenv("backend/.env", override=True)
 import re
 
 
-from sklearn.metrics.pairwise import cosine_similarity
-
-from services.llm import analyze_jd, analyze_resume
+from services.llm import analyze_jd, analyze_resume, score_experience
 
 
 
 def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower()).strip()
-
-
-from huggingface_hub import InferenceClient
-
-def _get_embedding(text: str, token: str) -> list[float] | None:
-    try:
-        client = InferenceClient(
-            model="sentence-transformers/all-MiniLM-L6-v2",
-            token=token
-        )
-        result = client.feature_extraction(text)
-        # result 是 numpy array，转成 list
-        if hasattr(result, 'tolist'):
-            vec = result.tolist()
-            # 如果是二维（token-level），mean pool
-            if vec and isinstance(vec[0], list):
-                dim = len(vec[0])
-                pooled = [sum(v[i] for v in vec) / len(vec) for i in range(dim)]
-                return pooled
-            return vec
-        return None
-    except Exception as e:
-        return None
 
 
 class ResumeMatcher:
@@ -148,67 +122,33 @@ class ResumeMatcher:
     def _experience_score_matrix(
         self, resume_parsed: dict, jd_parsed: dict
     ) -> float:
-        # 收集所有简历 bullets
-        bullets = []
+        bullets: list[str] = []
         for exp in resume_parsed.get("experience", []):
-            bullets.extend(exp.get("bullets", []))
+            bullets.extend(
+                bullet.strip()
+                for bullet in exp.get("bullets", [])
+                if isinstance(bullet, str) and bullet.strip()
+            )
         for proj in resume_parsed.get("projects", []):
             desc = proj.get("description", "")
-            if desc:
-                bullets.append(desc)
-        
+            if isinstance(desc, str) and desc.strip():
+                bullets.append(desc.strip())
 
-        requirements = (
+        requirements = [
+            req.strip()
+            for req in (
             jd_parsed.get("must_have", []) +
             jd_parsed.get("preferred", []) +
             jd_parsed.get("responsibilities", []) +
             jd_parsed.get("explicit_skills", [])
-        )
-       
+            )
+            if isinstance(req, str) and req.strip()
+        ]
 
         if not bullets or not requirements:
             return 0.0
 
-        hf_token = os.environ.get("HF_TOKEN", "").strip()
-        if hf_token:
-            score = self._hf_matrix_score(bullets, requirements, hf_token)
-            if score is not None:
-                return score
-
-        # fallback: TF-IDF
-        return self._tfidf_score(bullets, requirements)
-
-    def _hf_matrix_score(
-        self, bullets: list[str], requirements: list[str], token: str
-    ) -> float | None:
-        all_texts = bullets + requirements
-        embeddings = []
-        for text in all_texts:
-            emb = _get_embedding(text, token)
-            if emb is None:
-                return None
-            embeddings.append(emb)
-
-        n_b = len(bullets)
-        bullet_vecs = embeddings[:n_b]
-        req_vecs = embeddings[n_b:]
-
-        # 每条 requirement 找最强匹配的 bullet
-        sim_matrix = cosine_similarity(req_vecs, bullet_vecs)
-        top_per_req = sim_matrix.max(axis=1)
-        return float(top_per_req.mean() * 100)
-
-    def _tfidf_score(self, bullets: list[str], requirements: list[str]) -> float:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        vectorizer = TfidfVectorizer(lowercase=True, min_df=1, token_pattern=r"(?u)\b\w+\b")
-        corpus = bullets + requirements
-        try:
-            tfidf = vectorizer.fit_transform(corpus)
-        except ValueError:
-            return 0.0
-        n_b = len(bullets)
-        sim_matrix = cosine_similarity(tfidf[n_b:], tfidf[:n_b])
-        return float(sim_matrix.max(axis=1).mean() * 100)
+        return float(score_experience(bullets, requirements))
 
     def _calculate_score(
         self, skill_results: dict, experience_score: float, jd_parsed: dict
