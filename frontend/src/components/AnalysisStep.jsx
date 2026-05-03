@@ -16,8 +16,13 @@ function ScoreCard({ label, score, color }) {
   );
 }
 
-export default function AnalysisStep({ t, analysisResult, onGenerate, loading }) {
+export default function AnalysisStep({ lang, t, analysisResult, onGenerate, loading }) {
   if (!analysisResult) return null;
+
+  const gapSuggestion = (gap) =>
+    lang === "en"
+      ? gap.suggestion_en || gap.suggestion_zh || ""
+      : gap.suggestion_zh || gap.suggestion_en || "";
 
   return (
     <div className="space-y-4">
@@ -37,7 +42,7 @@ export default function AnalysisStep({ t, analysisResult, onGenerate, loading })
                   <span className="font-medium text-slate-800">{gap.skill}</span>
                   <span className={`rounded-full px-2 py-1 text-xs ${badgeStyles[gap.importance]}`}>{t[gap.importance]}</span>
                 </div>
-                <p className="mt-2 text-sm text-slate-600">{gap.suggestion_zh || gap.suggestion_en}</p>
+                <p className="mt-2 text-sm text-slate-600">{gapSuggestion(gap)}</p>
               </div>
             ))}
           </div>

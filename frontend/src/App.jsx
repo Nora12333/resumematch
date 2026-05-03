@@ -7,7 +7,7 @@ import GenerateStep from "./components/GenerateStep";
 import { useLanguage } from "./hooks/useLanguage";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export default function App() {
-  const { t, toggleLanguage } = useLanguage();
+  const { lang, t, toggleLanguage } = useLanguage();
   const [currentStep, setCurrentStep] = useState(1);
   const [resumeText, setResumeText] = useState("");
   const [jdText, setJdText] = useState("");
@@ -55,7 +55,7 @@ export default function App() {
         onAnalyze={handleAnalyze} loading={analyzing} setError={setError} />
       {analysisResult && (
         <div className="mt-5">
-          <AnalysisStep t={t} analysisResult={analysisResult} onGenerate={handleGenerate} loading={generating} />
+          <AnalysisStep lang={lang} t={t} analysisResult={analysisResult} onGenerate={handleGenerate} loading={generating} />
         </div>
       )}
       {(currentStep >= 3 || generatedResult) && (
