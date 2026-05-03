@@ -3,7 +3,7 @@ load_dotenv("backend/.env", override=True)
 import re
 
 
-from services.llm import analyze_jd, analyze_resume, score_experience
+from services.llm import analyze_jd, analyze_resume, score_experience, score_skills
 
 
 

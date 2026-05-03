@@ -183,6 +183,96 @@ Job requirements:
     return float(max(0, min(100, score)))
 
 
+def score_skills(
+    resume_skills: list[str], jd_skills: list[str]
+) -> list[dict[str, str]]:
+    """
+    For each JD skill, ask Claude whether the resume skill list covers it
+    (including close semantic equivalents, e.g. Tableau for "data viz tools").
+
+    Returns a list aligned with ``jd_skills`` (same length, same order):
+    ``[{"skill": <jd skill>, "status": "covered"|"partial"|"missing"}, ...]``.
+    """
+    _load_env()
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    clean_resume = [
+        s.strip() for s in resume_skills if isinstance(s, str) and s.strip()
+    ]
+    clean_jd = [s.strip() for s in jd_skills if isinstance(s, str) and s.strip()]
+    if not clean_jd:
+        return []
+
+    resume_block = "\n".join(f"- {s}" for s in clean_resume) or "(none listed)"
+    jd_block = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(clean_jd))
+    user_prompt = f"""You compare job-required skills against skills shown on a resume.
+
+Resume skills (explicit list only):
+{resume_block}
+
+JD skills to evaluate (evaluate EVERY item below, in order, use the exact jd_skill string from the list):
+{jd_block}
+
+Rules:
+- covered: the resume clearly demonstrates this skill or a direct equivalent (e.g. PostgreSQL covers "SQL", Tableau can cover "data visualization tools" if resume lists Tableau or strong viz tooling).
+- partial: related but weaker or indirect (e.g. Excel only when JD asks for "Python"; similar domain but not the same capability).
+- missing: no reasonable evidence in the resume skill list.
+
+Return ONLY valid JSON, no markdown:
+{{
+  "matches": [
+    {{"jd_skill": "<exact string from JD list>", "status": "covered|partial|missing"}}
+  ]
+}}
+
+The "matches" array MUST have exactly {len(clean_jd)} objects, same order as the numbered JD list above."""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        if _is_anthropic_error(e):
+            raise RuntimeError(f"Claude API error: {e}") from e
+        raise
+
+    raw_text = "".join(block.text for block in message.content if block.type == "text")
+    if not raw_text.strip():
+        raise ValueError("Empty response from Claude while scoring skills")
+
+    data = _parse_llm_json(raw_text)
+    matches = data.get("matches")
+    if not isinstance(matches, list):
+        raise ValueError("Claude skill response missing 'matches' array")
+
+    out: list[dict[str, str]] = []
+    valid_status = frozenset({"covered", "partial", "missing"})
+    for i, jd in enumerate(clean_jd):
+        status = "missing"
+        if i < len(matches) and isinstance(matches[i], dict):
+            row = matches[i]
+            raw_skill = row.get("jd_skill", jd)
+            jd_skill = raw_skill.strip() if isinstance(raw_skill, str) else jd
+            if jd_skill != jd:
+                jd_skill = jd
+            st = row.get("status", "missing")
+            if isinstance(st, str) and st.strip().lower() in valid_status:
+                status = st.strip().lower()
+        out.append({"skill": jd, "status": status})
+
+    if len(out) != len(clean_jd):
+        raise ValueError("Claude returned wrong number of skill matches")
+
+    return out
+
+
 def generate_resume(
     resume_text: str,
     jd_text: str,
