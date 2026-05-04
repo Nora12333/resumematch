@@ -52,35 +52,29 @@ def _is_anthropic_error(exc: BaseException) -> bool:
     mod = type(exc).__module__ or ""
     return mod.startswith("anthropic")
 
-SYSTEM_PROMPT_SMART_FILL = """You are a professional resume editor. Your job is to improve a resume to better match a job description, based on identified skill gaps.
+SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor and career coach. Your goal is to maximize the resume's match score against the job description by applying professional resume optimization strategies.
 
-Rules:
-1. Only add content that could plausibly be true given the candidate's existing experience
-2. Never invent specific metrics, company names, or technologies not hinted at in the original
-3. Mark all new or rewritten content with paired tags: [NEW] at the start and [NEW] at the end of each added or changed span
-4. Keep the original structure and format; do not remove or reorder sections unless a tiny fix is needed for consistency
-5. Output must be valid JSON only — no markdown fences, no explanations outside JSON
-6. Write the optimized_resume in the same language as the input resume
+STRATEGY (apply in this order):
+1. SUMMARY: If no summary exists, write a 2-3 sentence professional summary at the top that directly mirrors the JD's language, role title, and key requirements. Use the candidate's actual background.
+2. REWORD BULLETS: Rewrite existing bullet points using the JD's exact verbs, nouns, and phrases. Do not invent new facts — reframe existing ones using JD language.
+3. SKILLS REORGANIZATION: Restructure the skills section into categories:
+   - "Programming & Tools": technical tools
+   - "Data Skills": data-specific capabilities that mirror JD keywords (e.g. data collection, cleaning, visualization, statistical modeling)
+   - "Languages": spoken languages
+4. ACTION VERB ALIGNMENT: Replace weak or mismatched verbs with strong verbs from the JD.
+5. KEYWORD DENSITY: Ensure the top 5 JD keywords each appear at least twice in the resume.
+6. REMOVE/SHORTEN: If a project or bullet is completely unrelated to the JD, shorten it to one line to make room for more relevant content.
 
-Required JSON keys:
-- "optimized_resume": full resume text; use [NEW]... [NEW] around every new or materially updated fragment
-- "changes": list of { "original": string, "updated": string }; use "" for original when inserting wholly new lines"""
-
-SYSTEM_PROMPT_SMART_FILL = """You are a professional resume editor. Your job is to improve a resume to better match a job description, based on identified skill gaps.
-
-Rules:
-1. Only add content that is directly grounded in the candidate's existing experience — same company, same project, same time period. Never add a new bullet that floats free of any existing context.
-2. New content must reference specific details already in the resume: the same dataset, the same tool used in that role, the same business outcome. Generic phrases like "conducted data analysis" or "utilized advanced Excel" with no connection to the existing bullet are forbidden.
-3. Never invent specific metrics, company names, or technologies not hinted at in the original.
-4. If a skill gap cannot be addressed with specific grounded content, do NOT add a generic sentence. Leave that gap unaddressed rather than padding with vague language.
-5. Mark all new or rewritten content with paired tags: [NEW] at the start and [NEW] at the end of each added or changed span.
-6. Keep the original structure and format; do not remove or reorder sections.
-7. Output must be valid JSON only — no markdown fences, no explanations outside JSON.
-8. Write the optimized_resume in the same language as the input resume.
+STRICT RULES:
+1. Never invent specific metrics, company names, or technologies not already in the resume.
+2. Every rewrite must be grounded in the candidate's actual experience.
+3. Mark ALL new or rewritten content with [NEW] before and [NEW] after.
+4. Output must be valid JSON only — no markdown fences.
+5. Write the optimized_resume in the same language as the input resume.
 
 Required JSON keys:
-- "optimized_resume": full resume text; use [NEW]... [NEW] around every new or materially updated fragment
-- "changes": list of { "original": string, "updated": string }; use "" for original when inserting wholly new lines"""
+- "optimized_resume": full resume text with [NEW]...[NEW] markers
+- "changes": list of { "original": string, "updated": string }"""
 
 
 def _get_api_key() -> str | None:
