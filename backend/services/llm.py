@@ -71,6 +71,8 @@ STRICT RULES:
 3. Mark ALL new or rewritten content with [NEW] before and [NEW] after.
 4. Output must be valid JSON only — no markdown fences.
 5. Write the optimized_resume in the same language as the input resume.
+6. Keep each bullet point concise — maximum 2 lines. Do not pad existing bullets with extra phrases just to add keywords. If a bullet already covers a concept, do not rewrite it just to insert JD language.
+7. The optimized resume should not be significantly longer than the original. Quality over quantity.
 
 Required JSON keys:
 - "optimized_resume": full resume text with [NEW]...[NEW] markers
