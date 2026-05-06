@@ -74,7 +74,7 @@ OUTPUT RULES:
 
 MARKING RULE:
 - [NEW] tags must wrap ONLY the changed words or phrases, not the entire sentence.
-- Example: "• [NEW]Developed[NEW] logistic regression models..." NOT "[NEW]• Developed logistic regression models...[NEW]""""
+- Example: "• [NEW]Developed[NEW] logistic regression models..." NOT "[NEW]• Developed logistic regression models...[NEW]"""
 
 
 
