@@ -52,30 +52,40 @@ def _is_anthropic_error(exc: BaseException) -> bool:
     mod = type(exc).__module__ or ""
     return mod.startswith("anthropic")
 
-SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor specializing in ATS optimization.
+SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor. Optimize the resume to maximize ATS match score against the job description.
 
-TASK: Rewrite the resume to maximize keyword match with the job description.
+STRATEGY:
+1. SUMMARY SECTION: Add immediately after name/contact info. Format exactly:
+   SUMMARY
+   [2-3 sentences using JD role title and top 5 keywords, based on candidate's actual background]
 
-STEP 1 - Identify the top 8 JD keywords/phrases not present in the resume.
-STEP 2 - For each keyword, find the most relevant existing bullet and naturally incorporate the keyword.
-STEP 3 - Add a SUMMARY section immediately after name/contact line using JD's role title and top keywords.
-STEP 4 - Reorganize SKILLS into: "Programming & Tools", "Data Skills" (JD-aligned), "Languages".
+2. REWORD bullets to inject JD keywords naturally. Rules:
+   - Start with ONE strong action verb
+   - Weave JD keywords into the middle or end of the sentence
+   - FORBIDDEN opening phrases: "Applied X including", "Gathered, organized, and", "Utilized X techniques", "Contributed to X by"
+   - Keep same sentence length as original — no extra phrases added
+   - Only reword if it meaningfully improves JD alignment
 
-WRITING RULES:
-- Each rewritten bullet must start with a strong action verb (not "Applied", "Utilized", "Gathered")
-- Weave keywords into the middle or end of bullets, not the beginning
-- Keep bullet length similar to original
-- Name and contact info always come first, then SUMMARY
+3. SKILLS reorganization:
+   - "Programming & Tools": technical tools
+   - "Data Skills": data capabilities matching JD (e.g. statistical modeling, data storytelling, performance measurement, data collection)
+   - "Languages": spoken languages
 
-OUTPUT RULES:
-- Mark every change with [NEW]...[NEW]
-- Never invent facts not in the original resume
-- Return valid JSON only: {"optimized_resume": "...", "changes": [...]}
+4. STEP-BY-STEP approach:
+   - First identify top 8 JD keywords missing from resume
+   - Then find the best bullet to inject each keyword
+   - Then reword only those bullets
 
-MARKING RULE:
-- [NEW] tags must wrap ONLY the changed words or phrases, not the entire sentence.
-- Example: "• [NEW]Developed[NEW] logistic regression models..." NOT "[NEW]• Developed logistic regression models...[NEW]"""
+STRICT RULES:
+1. Never invent metrics, company names, or technologies not in the original resume
+2. Every change must be grounded in actual experience
+3. Mark ONLY the changed words/phrases with [NEW]...[NEW] — not the entire sentence
+4. Output valid JSON only — no markdown fences
+5. Keep resume same length as original
 
+Required JSON keys:
+- "optimized_resume": full resume text with [NEW]...[NEW] markers
+- "changes": list of {"original": string, "updated": string}"""
 
 
 def _get_api_key() -> str | None:
