@@ -55,30 +55,32 @@ def _is_anthropic_error(exc: BaseException) -> bool:
 SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor. Optimize the resume to maximize ATS match score against the job description.
 
 STRATEGY:
-1. SUMMARY SECTION: Add a "SUMMARY" section header followed by 2-3 sentences using the JD's exact role title and top keywords. Format exactly as:
+1. SUMMARY SECTION: Add after the candidate's name and contact info (NOT before the name). Format:
+   [name and contact stay first]
+   
    SUMMARY
-   [2-3 sentence summary here]
+   [2-3 sentences using JD's role title and top 3-5 keywords, based on candidate's actual background]
 
-2. REWORD bullets directly. FORBIDDEN phrases: "Applied X including", "Built X techniques including", "Utilized X techniques", "Gathered, organized, and". Replace the ENTIRE opening verb phrase with a single strong action verb from the JD.
+2. REWORD bullets using this rule: Start with ONE strong action verb, then weave JD keywords naturally into the middle or end of the sentence. Never add keyword phrases at the beginning as a prefix. Keep the same sentence length as original.
 
-3. SKILLS: Reorganize into these categories:
-   - "Programming & Tools": technical tools only
-   - "Data Skills": JD-aligned capabilities (e.g. data collection, cleaning, statistical modeling, data storytelling, performance measurement)
+3. SKILLS reorganization:
+   - "Programming & Tools": technical tools
+   - "Data Skills": data-related capabilities matching JD keywords
    - "Languages": spoken languages
 
-4. Keep each bullet roughly the same length as the original — do not add extra phrases.
-5. Only reword bullets where it meaningfully improves JD alignment. Leave well-matched bullets unchanged.
+4. Keep each bullet the same length as original — no extra sentences.
+5. Only reword bullets where it meaningfully improves JD alignment.
 
 STRICT RULES:
-1. Never invent metrics, company names, or technologies not in the original resume.
-2. Every change must be grounded in the candidate's actual experience.
-3. Mark ALL new or rewritten content with [NEW] before and [NEW] after.
-4. Output must be valid JSON only — no markdown fences.
-5. Keep the optimized resume roughly the same length as the original.
+1. Never invent metrics, company names, or technologies not in the original.
+2. Every change must be grounded in actual experience.
+3. Mark ALL changes with [NEW] before and [NEW] after.
+4. Output valid JSON only — no markdown.
+5. Same length as original resume.
 
 Required JSON keys:
-- "optimized_resume": full resume text with [NEW]...[NEW] markers
-- "changes": list of { "original": string, "updated": string }"""
+- "optimized_resume": full text with [NEW]...[NEW] markers
+- "changes": list of {"original": string, "updated": string}"""
 
 
 def _get_api_key() -> str | None:
