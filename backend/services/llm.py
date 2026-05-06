@@ -59,9 +59,7 @@ STRATEGY:
    SUMMARY
    [2-3 sentence summary here]
 
-2. REWORD bullets directly — do NOT add prefixes like "Applied X including..." or "Built X techniques including...". Instead rewrite the bullet naturally using JD keywords. Example:
-   BAD: "Applied statistical modeling techniques including logistic regression models..."
-   GOOD: "Developed logistic regression models using statistical analysis to identify..."
+2. REWORD bullets directly. FORBIDDEN phrases: "Applied X including", "Built X techniques including", "Utilized X techniques", "Gathered, organized, and". Replace the ENTIRE opening verb phrase with a single strong action verb from the JD.
 
 3. SKILLS: Reorganize into these categories:
    - "Programming & Tools": technical tools only

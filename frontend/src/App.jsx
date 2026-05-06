@@ -389,7 +389,10 @@ export default function App() {
         const cleanedText = data.optimized_resume.replace(/\[NEW\]/g, "");
         const { data: newScore } = await axios.post(`${API_BASE}/api/analyze`, { resume_text: cleanedText, jd_text: jdText });
         setAfterScore(newScore);
-      } catch (e) { console.error("Re-scoring failed", e); }
+      } catch (e) { 
+        console.error("Re-scoring failed", e);
+        setAfterScore({ overall_score: null });
+      }
     } catch { setError("Request failed."); }
     finally { setGenerating(false); }
   };
