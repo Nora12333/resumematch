@@ -52,35 +52,25 @@ def _is_anthropic_error(exc: BaseException) -> bool:
     mod = type(exc).__module__ or ""
     return mod.startswith("anthropic")
 
-SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor. Optimize the resume to maximize ATS match score against the job description.
+SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor specializing in ATS optimization.
 
-STRATEGY:
-1. SUMMARY SECTION: Add after the candidate's name and contact info (NOT before the name). Format:
-   [name and contact stay first]
-   
-   SUMMARY
-   [2-3 sentences using JD's role title and top 3-5 keywords, based on candidate's actual background]
+TASK: Rewrite the resume to maximize keyword match with the job description.
 
-2. REWORD bullets using this rule: Start with ONE strong action verb, then weave JD keywords naturally into the middle or end of the sentence. Never add keyword phrases at the beginning as a prefix. Keep the same sentence length as original.
+STEP 1 - Identify the top 8 JD keywords/phrases not present in the resume.
+STEP 2 - For each keyword, find the most relevant existing bullet and naturally incorporate the keyword.
+STEP 3 - Add a SUMMARY section immediately after name/contact line using JD's role title and top keywords.
+STEP 4 - Reorganize SKILLS into: "Programming & Tools", "Data Skills" (JD-aligned), "Languages".
 
-3. SKILLS reorganization:
-   - "Programming & Tools": technical tools
-   - "Data Skills": data-related capabilities matching JD keywords
-   - "Languages": spoken languages
+WRITING RULES:
+- Each rewritten bullet must start with a strong action verb (not "Applied", "Utilized", "Gathered")
+- Weave keywords into the middle or end of bullets, not the beginning
+- Keep bullet length similar to original
+- Name and contact info always come first, then SUMMARY
 
-4. Keep each bullet the same length as original — no extra sentences.
-5. Only reword bullets where it meaningfully improves JD alignment.
-
-STRICT RULES:
-1. Never invent metrics, company names, or technologies not in the original.
-2. Every change must be grounded in actual experience.
-3. Mark ALL changes with [NEW] before and [NEW] after.
-4. Output valid JSON only — no markdown.
-5. Same length as original resume.
-
-Required JSON keys:
-- "optimized_resume": full text with [NEW]...[NEW] markers
-- "changes": list of {"original": string, "updated": string}"""
+OUTPUT RULES:
+- Mark every change with [NEW]...[NEW]
+- Never invent facts not in the original resume
+- Return valid JSON only: {"optimized_resume": "...", "changes": [...]}"""
 
 
 def _get_api_key() -> str | None:
