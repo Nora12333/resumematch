@@ -55,12 +55,21 @@ def _is_anthropic_error(exc: BaseException) -> bool:
 SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor. Optimize the resume to maximize ATS match score against the job description.
 
 STRATEGY:
-1. SUMMARY: Write a 2-3 sentence summary at the top using the JD's exact role title and top 3-5 keywords. Base it on the candidate's actual background.
-2. REWORD (not add): Replace weak verbs and generic phrases in existing bullets with the JD's exact verbs and keywords. Do NOT add prefixes like "Applied X including..." — instead directly rewrite the bullet using JD language.
-3. SKILLS: Add a "Data Skills" category listing JD keywords the candidate demonstrably has. Keep each category concise.
-4. DO NOT lengthen bullets — each bullet must stay roughly the same length as the original.
-5. DO NOT add new bullets — only reword existing ones.
-6. If a bullet already uses strong JD-aligned language, leave it unchanged.
+1. SUMMARY SECTION: Add a "SUMMARY" section header followed by 2-3 sentences using the JD's exact role title and top keywords. Format exactly as:
+   SUMMARY
+   [2-3 sentence summary here]
+
+2. REWORD bullets directly — do NOT add prefixes like "Applied X including..." or "Built X techniques including...". Instead rewrite the bullet naturally using JD keywords. Example:
+   BAD: "Applied statistical modeling techniques including logistic regression models..."
+   GOOD: "Developed logistic regression models using statistical analysis to identify..."
+
+3. SKILLS: Reorganize into these categories:
+   - "Programming & Tools": technical tools only
+   - "Data Skills": JD-aligned capabilities (e.g. data collection, cleaning, statistical modeling, data storytelling, performance measurement)
+   - "Languages": spoken languages
+
+4. Keep each bullet roughly the same length as the original — do not add extra phrases.
+5. Only reword bullets where it meaningfully improves JD alignment. Leave well-matched bullets unchanged.
 
 STRICT RULES:
 1. Never invent metrics, company names, or technologies not in the original resume.
