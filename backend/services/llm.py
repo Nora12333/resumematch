@@ -70,11 +70,13 @@ WRITING RULES:
 OUTPUT RULES:
 - Mark every change with [NEW]...[NEW]
 - Never invent facts not in the original resume
-- Return valid JSON only: {"optimized_resume": "...", "changes": [...]}"""
+- Return valid JSON only: {"optimized_resume": "...", "changes": [...]}
 
-MARKING RULE: 
-- [NEW] tags must wrap ONLY the changed words or phrases, not the entire sentence. 
-- Example: "• [NEW]Developed[NEW] logistic regression models..." NOT "[NEW]• Developed logistic regression models...[NEW]"
+MARKING RULE:
+- [NEW] tags must wrap ONLY the changed words or phrases, not the entire sentence.
+- Example: "• [NEW]Developed[NEW] logistic regression models..." NOT "[NEW]• Developed logistic regression models...[NEW]""""
+
+
 
 def _get_api_key() -> str | None:
     _load_env()
