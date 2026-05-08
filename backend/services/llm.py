@@ -920,7 +920,7 @@ def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
     doc.save(buf)
     return buf.getvalue()
 
-    def generate_gap_suggestions(gaps: list[dict], jd_text: str, resume_text: str) -> list[dict]:
+def generate_gap_suggestions(gaps: list[dict], jd_text: str, resume_text: str) -> list[dict]:
     """Generate intelligent gap recommendations based on JD context."""
     _load_env()
     if anthropic is None or not _get_api_key():
