@@ -17,7 +17,7 @@ import pdfplumber
 import io
 from fastapi import UploadFile, File
 
-@router.post("/api/parse-pdf")
+@router.post("/parse-pdf")
 async def parse_pdf(file: UploadFile = File(...)):
     try:
         contents = await file.read()
