@@ -52,34 +52,31 @@ def _is_anthropic_error(exc: BaseException) -> bool:
     mod = type(exc).__module__ or ""
     return mod.startswith("anthropic")
 
-SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor. Optimize the resume to maximize ATS match score against the job description.
+SYSTEM_PROMPT_SMART_FILL = """You are an expert resume editor specializing in ATS optimization and natural language.
 
 STRATEGY:
-1. SUMMARY SECTION: Add immediately after name and contact info. Format exactly:
-   SUMMARY
-   [2-3 sentences using JD role title and top keywords, based on candidate's actual background]
+1. SUMMARY: Add after name/contact. Write 2-3 sentences that are truthful and natural — use JD keywords only where they genuinely apply to the candidate's background. Do not claim skills or experiences the candidate doesn't have.
 
-2. REWORD bullets to inject JD keywords. Style guide:
-   - Start with ONE strong verb
-   - Add JD keywords naturally at the END of the bullet, not the beginning
-   - BAD: "Applied statistical modeling techniques including logistic regression..."
-   - GOOD: "Developed logistic regression models identifying optimal engagement window, translating findings into actionable benchmarks"
-   - Reword AGGRESSIVELY — change at least 5-8 bullets to inject JD keywords
-   - Target: every bullet should contain at least one JD keyword
+2. REWORD bullets aggressively but naturally:
+   - Completely rewrite bullets using JD vocabulary where it genuinely fits
+   - Replace technical jargon with JD-friendly language (e.g. "identified patterns" → "analyzed trends across segments")
+   - Add context that connects the candidate's work to JD themes (data quality, storytelling, insights)
+   - Every bullet should feel like it belongs in this JD's world
+   - Reword at least 8-10 bullets
 
-3. SKILLS reorganization:
-   - "Programming & Tools": technical tools
-   - "Data Skills": JD-aligned capabilities (data collection, cleaning, statistical modeling, data storytelling, performance measurement)
+3. SKILLS: Reorganize into:
+   - "Programming & Tools": technical tools + relevant software
+   - "Data Skills": data cleaning, trend analysis, data storytelling, dashboard development, insight communication — use JD's exact skill language
    - "Languages": spoken languages
 
-4. Keep each bullet roughly the same length as original.
+4. Do NOT invent specific metrics, company names, or technologies not in the original.
+5. If a JD skill genuinely applies to the candidate's experience, use it even if the original wording was different.
 
 STRICT RULES:
-1. Never invent metrics, company names, or technologies not in the original resume.
-2. Every change must be grounded in actual experience.
-3. Mark ALL new or rewritten content with [NEW] before and [NEW] after.
-4. Output valid JSON only — no markdown fences.
-5. Keep resume roughly same length as original.
+1. Every rewrite must be grounded in actual experience — same company, same project.
+2. Mark ONLY changed words/phrases with [NEW]...[NEW], not entire sentences.
+3. Output valid JSON only.
+4. Keep resume same length as original.
 
 Required JSON keys:
 - "optimized_resume": full resume text with [NEW]...[NEW] markers
@@ -189,15 +186,9 @@ def score_skills(
     resume_skills: list[str], jd_skills: list[str]
 ) -> list[dict[str, str]]:
     """
-    For each JD skill, ask Claude whether the resume skill list covers it
-    (including close semantic equivalents, e.g. Tableau for "data viz tools").
-
-    Returns a list aligned with ``jd_skills`` (same length, same order):
-    ``[{"skill": <jd skill>, "status": "covered"|"partial"|"missing"}, ...]``.
-
-    ``covered`` requires an explicit mention of that tool/skill (or unambiguous
-    same-name variant) on the resume skill list; broader semantic overlap is
-    ``partial`` only.
+    1) covered: the resume explicitly names this skill OR uses a clear equivalent (e.g. "Tableau dashboards" covers "data visualization", "logistic regression" covers "statistical modeling", "A/B testing" covers "testing methodologies")
+    2) partial: resume has related experience but not a direct match
+    3) missing: no relevant experience at all
     """
     _load_env()
     if anthropic is None:
