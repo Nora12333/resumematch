@@ -1,9 +1,37 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useLanguage } from "./hooks/useLanguage";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+// ─── Animation Hook ───
+function useInView() {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setInView(true); observer.disconnect(); }
+    }, { threshold: 0.15 });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, inView];
+}
+
+function AnimatedSection({ children, delay = 0 }) {
+  const [ref, inView] = useInView();
+  return (
+    <div ref={ref} style={{
+      opacity: inView ? 1 : 0,
+      transform: inView ? "translateY(0)" : "translateY(40px)",
+      transition: `opacity 0.7s ease ${delay}s, transform 0.7s ease ${delay}s`,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// ─── Page Transition Wrapper ───
 function PageWrapper({ children }) {
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 20); return () => clearTimeout(t); }, []);
@@ -14,6 +42,7 @@ function PageWrapper({ children }) {
   );
 }
 
+// ─── Step Bar ───
 function StepBar({ step }) {
   const steps = ["Upload", "Analyze", "Compare"];
   return (
@@ -32,6 +61,7 @@ function StepBar({ step }) {
   );
 }
 
+// ─── Typewriter Loading ───
 const ANALYZE_LINES = ["Reading your resume...", "Parsing job description...", "Identifying skill requirements...", "Analyzing experience alignment...", "Scoring keyword matches...", "Calculating match score...", "Finalizing analysis..."];
 const GENERATE_LINES = ["Understanding your profile...", "Identifying improvement areas...", "Crafting targeted bullet points...", "Refining language and tone...", "Aligning with job requirements...", "Adding strategic keywords...", "Polishing your resume..."];
 
@@ -77,6 +107,7 @@ function TypewriterLoading({ isAnalyzing }) {
   );
 }
 
+// ─── Landing Page ───
 function LandingPage({ onBegin, toggleLanguage, lang }) {
   return (
     <PageWrapper>
@@ -88,47 +119,89 @@ function LandingPage({ onBegin, toggleLanguage, lang }) {
             <button className="begin-btn" onClick={onBegin}>Begin</button>
           </div>
         </nav>
+
         <section className="hero">
-          <div className="hero-tag">INTELLIGENT OPTIMIZATION</div>
+          <AnimatedSection delay={0.1}>
+            <div className="hero-tag">INTELLIGENT OPTIMIZATION</div>
+          </AnimatedSection>
           <div className="hero-grid">
             <div className="hero-left">
-              <h1 className="hero-title">Your resume,<br />refined by<br />intelligence.</h1>
-              <p className="hero-sub">A sophisticated approach to resume optimization.<br />Every word measured, every detail considered.</p>
-              <button className="outline-btn" onClick={onBegin}>BEGIN NOW</button>
+              <AnimatedSection delay={0.2}>
+                <h1 className="hero-title">Your resume,<br />refined by<br />intelligence.</h1>
+                <p className="hero-sub">A sophisticated approach to resume optimization.<br />Every word measured, every detail considered.</p>
+                <button className="outline-btn" onClick={onBegin}>BEGIN NOW</button>
+              </AnimatedSection>
             </div>
             <div className="hero-right">
-              <div className="resume-card">
-                <div className="rc-bar dark" /><div className="rc-bar mid" style={{ width: "70%" }} />
-                <div className="rc-bar light" style={{ width: "85%" }} /><div className="rc-bar light" style={{ width: "60%" }} />
-                <div style={{ marginTop: 16 }}><div className="rc-bar light" style={{ width: "90%" }} /><div className="rc-bar light" style={{ width: "75%" }} /></div>
-                <div className="match-badge"><div className="mb-label">MATCH SCORE</div><div className="mb-score">68%</div></div>
-              </div>
+              <AnimatedSection delay={0.4}>
+                <div className="resume-card">
+                  <div className="rc-bar dark" /><div className="rc-bar mid" style={{ width: "70%" }} />
+                  <div className="rc-bar light" style={{ width: "85%" }} /><div className="rc-bar light" style={{ width: "60%" }} />
+                  <div style={{ marginTop: 16 }}><div className="rc-bar light" style={{ width: "90%" }} /><div className="rc-bar light" style={{ width: "75%" }} /></div>
+                  <div className="match-badge"><div className="mb-label">MATCH SCORE</div><div className="mb-score">68%</div></div>
+                </div>
+              </AnimatedSection>
             </div>
           </div>
         </section>
+
         <section className="process-section">
-          <h2 className="process-title">Three steps to precision</h2>
+          <AnimatedSection delay={0}>
+            <h2 className="process-title">Three steps to precision</h2>
+          </AnimatedSection>
           <div className="process-steps">
-            {[{ n: "01", name: "Submit", desc: "Upload your current resume in any standard format" }, { n: "02", name: "Analyze", desc: "Provide the job description you're targeting" }, { n: "03", name: "Refine", desc: "Receive an optimized version, ready for submission" }].map((s, i) => (
-              <div key={i}><div className="process-row"><span className="process-num">{s.n}</span><span className="process-name">{s.name}</span><span className="process-desc">{s.desc}</span></div>{i < 2 && <div className="process-divider" />}</div>
+            {[
+              { n: "01", name: "Submit", desc: "Upload your current resume in any standard format" },
+              { n: "02", name: "Analyze", desc: "Provide the job description you're targeting" },
+              { n: "03", name: "Refine", desc: "Receive an optimized version, ready for submission" }
+            ].map((s, i) => (
+              <div key={i}>
+                <AnimatedSection delay={i * 0.15}>
+                  <div className="process-row">
+                    <span className="process-num">{s.n}</span>
+                    <span className="process-name">{s.name}</span>
+                    <span className="process-desc">{s.desc}</span>
+                  </div>
+                </AnimatedSection>
+                {i < 2 && <div className="process-divider" />}
+              </div>
             ))}
           </div>
         </section>
+
         <section className="testimonials-section">
-          <div className="section-tag">TRUSTED BY JOB SEEKERS</div>
-          <h2 className="section-h2">Results that speak</h2>
+          <AnimatedSection delay={0}>
+            <div className="section-tag">TRUSTED BY JOB SEEKERS</div>
+            <h2 className="section-h2">Results that speak</h2>
+          </AnimatedSection>
           <div className="t-grid">
-            {[{ q: "I went from zero callbacks to three interviews in one week. The resume transformation was remarkable.", name: "Sarah Chen", role: "Data Analyst · New York" }, { q: "The semantic matching is extraordinary. It understands what recruiters actually look for, not just keywords.", name: "Marcus Rivera", role: "Software Engineer · San Francisco" }, { q: "Every resume I've submitted since using this tool has gotten a response. The precision is unmatched.", name: "Priya Sharma", role: "Product Manager · London" }].map((t, i) => (
-              <div key={i} className="t-card"><p className="t-quote">"{t.q}"</p><div className="t-author"><div className="t-avatar">{t.name.split(" ").map(n => n[0]).join("")}</div><div><div className="t-name">{t.name}</div><div className="t-role">{t.role}</div></div></div></div>
+            {[
+              { q: "I went from zero callbacks to three interviews in one week. The resume transformation was remarkable.", name: "Sarah Chen", role: "Data Analyst · New York" },
+              { q: "The semantic matching is extraordinary. It understands what recruiters actually look for, not just keywords.", name: "Marcus Rivera", role: "Software Engineer · San Francisco" },
+              { q: "Every resume I've submitted since using this tool has gotten a response. The precision is unmatched.", name: "Priya Sharma", role: "Product Manager · London" }
+            ].map((t, i) => (
+              <AnimatedSection key={i} delay={i * 0.15}>
+                <div className="t-card">
+                  <p className="t-quote">"{t.q}"</p>
+                  <div className="t-author">
+                    <div className="t-avatar">{t.name.split(" ").map(n => n[0]).join("")}</div>
+                    <div><div className="t-name">{t.name}</div><div className="t-role">{t.role}</div></div>
+                  </div>
+                </div>
+              </AnimatedSection>
             ))}
           </div>
         </section>
-        <section className="cta-section">
-          <h2 className="cta-title">Begin with precision.</h2>
-          <p className="cta-sub">Upload your resume and discover what intelligence reveals.</p>
-          <button className="outline-btn large" onClick={onBegin}>UPLOAD RESUME</button>
-          <p className="cta-note">No account required · Results in seconds · Completely private</p>
-        </section>
+
+        <AnimatedSection delay={0}>
+          <section className="cta-section">
+            <h2 className="cta-title">Begin with precision.</h2>
+            <p className="cta-sub">Upload your resume and discover what intelligence reveals.</p>
+            <button className="outline-btn large" onClick={onBegin}>UPLOAD RESUME</button>
+            <p className="cta-note">No account required · Results in seconds · Completely private</p>
+          </section>
+        </AnimatedSection>
+
         <footer className="footer">
           <div className="logo">ResumeMatch</div>
           <p style={{ fontSize: 14, color: "#6b7280", marginTop: 8 }}>Intelligent optimization for the modern professional.</p>
@@ -138,11 +211,15 @@ function LandingPage({ onBegin, toggleLanguage, lang }) {
   );
 }
 
-function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, loading, error, toggleLanguage, lang }) {
+// ─── Upload Page ───
+function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, loading, error, toggleLanguage, lang, onLogoClick }) {
   return (
     <PageWrapper>
       <div className="page">
-        <nav className="app-nav"><span className="logo">ResumeMatch</span><button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button></nav>
+        <nav className="app-nav">
+          <span className="logo" onClick={onLogoClick} style={{ cursor: "pointer" }}>ResumeMatch</span>
+          <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
+        </nav>
         <StepBar step={1} />
         <div className="page-body">
           <div className="page-heading"><h1 className="page-title">Upload Your Information</h1><p className="page-sub">Paste your resume and the job description to begin analysis</p></div>
@@ -160,7 +237,8 @@ function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, l
   );
 }
 
-function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang, onBack, selectedKeywords, setSelectedKeywords }) {
+// ─── Analyze Page ───
+function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang, onLogoClick, selectedKeywords, setSelectedKeywords }) {
   const overall = analysisResult?.overall_score ?? 0;
   const skill = analysisResult?.skill_score ?? 0;
   const exp = analysisResult?.experience_score ?? 0;
@@ -172,18 +250,14 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
     setSelectedKeywords(prev => prev.includes(word) ? prev.filter(w => w !== word) : [...prev, word]);
   };
 
-  // Pass gaps matching selected keywords to generate
   const selectedGapsData = gaps.filter(g => selectedKeywords.includes(g.skill));
 
   return (
     <PageWrapper>
       <div className="page">
         <nav className="app-nav">
-          <span className="logo">ResumeMatch</span>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
-            <button className="back-btn" onClick={onBack}>← Back</button>
-          </div>
+          <span className="logo" onClick={onLogoClick} style={{ cursor: "pointer" }}>ResumeMatch</span>
+          <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
         </nav>
         <StepBar step={2} />
         <div className="page-body">
@@ -198,7 +272,6 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
             ))}
           </div>
           <div className="two-col" style={{ marginTop: 40 }}>
-            {/* Left: Skill Gaps - original style */}
             <div>
               <h2 className="section-h2">Skill Gaps</h2>
               <div className="gaps-list">
@@ -213,25 +286,17 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
                 {ungappedGaps.length === 0 && <p style={{ color: "#6b7280", fontSize: 14, padding: 16 }}>No major gaps found!</p>}
               </div>
             </div>
-
-            {/* Right: Keywords - clickable */}
             <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h2 className="section-h2" style={{ marginBottom: 0 }}>Keywords</h2>
-              </div>
-              <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
-                Click unmatched keywords to ask AI to add them to your resume.
-              </p>
+              <h2 className="section-h2" style={{ marginBottom: 8 }}>Keywords</h2>
+              <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Click unmatched keywords to ask AI to add them.</p>
               <div className="keywords-wrap">
                 {keywords.map((k, i) => {
                   const isSelected = selectedKeywords.includes(k.word);
                   return (
-                    <div
-                      key={i}
+                    <div key={i}
                       className={`kw-tag ${k.matched ? "matched" : ""} ${isSelected ? "kw-selected" : ""}`}
                       onClick={() => !k.matched && toggleKeyword(k.word)}
-                      style={{ cursor: k.matched ? "default" : "pointer", userSelect: "none" }}
-                    >
+                      style={{ cursor: k.matched ? "default" : "pointer", userSelect: "none" }}>
                       {k.word}{k.matched ? " ✓" : isSelected ? " ✓" : ""}
                     </div>
                   );
@@ -239,7 +304,7 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
               </div>
               {selectedKeywords.length > 0 && (
                 <p style={{ fontSize: 13, color: "var(--navy)", marginTop: 12, fontWeight: 600 }}>
-                  {selectedKeywords.length} keyword{selectedKeywords.length > 1 ? "s" : ""} selected to add
+                  {selectedKeywords.length} keyword{selectedKeywords.length > 1 ? "s" : ""} selected
                 </p>
               )}
             </div>
@@ -255,7 +320,8 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
   );
 }
 
-function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afterScore, onBack, onRegenerate, loading, toggleLanguage, lang, mode, setMode, apiBase, selectedGapsData }) {
+// ─── Compare Page ───
+function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afterScore, onRegenerate, loading, toggleLanguage, lang, mode, setMode, apiBase, selectedGapsData, onLogoClick }) {
   const optimized = generatedResult?.optimized_resume || "";
   const [downloading, setDownloading] = useState(false);
   const [pages, setPages] = useState(2);
@@ -263,13 +329,12 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
   const overallAfter = afterScore?.overall_score ?? null;
   const improvement = overallAfter !== null ? overallAfter - overallBefore : null;
   const originalLines = resumeText.split("\n");
-  const optimizedLines = optimized.split("\n");
 
   const renderLine = (text) => {
     const parts = text.split(/(\[NEW\][\s\S]*?\[NEW\])/g);
-return parts.map((part, i) => {
-  if (/^\[NEW\][\s\S]*\[NEW\]$/.test(part)) {
-    const cleaned = part.replace(/^\[NEW\]/, "").replace(/\[NEW\]$/, "");
+    return parts.map((part, i) => {
+      if (/^\[NEW\][\s\S]*\[NEW\]$/.test(part)) {
+        const cleaned = part.replace(/^\[NEW\]/, "").replace(/\[NEW\]$/, "");
         return <mark key={i} className="new-mark">{cleaned}</mark>;
       }
       return <span key={i}>{part}</span>;
@@ -298,11 +363,8 @@ return parts.map((part, i) => {
     <PageWrapper>
       <div className="page">
         <nav className="app-nav">
-          <span className="logo">ResumeMatch</span>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
-            <button className="back-btn" onClick={onBack}>← Back</button>
-          </div>
+          <span className="logo" onClick={onLogoClick} style={{ cursor: "pointer" }}>ResumeMatch</span>
+          <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
         </nav>
         <StepBar step={3} />
         <div className="compare-header"><h1 className="page-title">Compare Results</h1><p className="page-sub">See the improvements made to your resume</p></div>
@@ -315,7 +377,7 @@ return parts.map((part, i) => {
               </div>
               <div className="compare-col highlight-col">
                 <div className="compare-col-header"><h2 className="col-title">Optimized Resume</h2><span className="improved-badge">↗ Improved</span></div>
-                <div className="resume-doc" style={{whiteSpace:"pre-wrap", fontFamily:"'Courier New', monospace", fontSize:"12.5px", lineHeight:"1.8"}}>{renderLine(optimized)}</div>
+                <div className="resume-doc" style={{ whiteSpace: "pre-wrap", fontFamily: "'Courier New', monospace", fontSize: "12.5px", lineHeight: "1.8" }}>{renderLine(optimized)}</div>
               </div>
             </div>
           </div>
@@ -348,6 +410,7 @@ return parts.map((part, i) => {
   );
 }
 
+// ─── Main App ───
 export default function App() {
   const { lang, toggleLanguage } = useLanguage();
   const [page, setPage] = useState("landing");
@@ -363,6 +426,39 @@ export default function App() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
 
+  // ─── Browser history navigation ───
+  useEffect(() => {
+    // Set initial history state
+    window.history.replaceState({ page: "landing" }, "", window.location.pathname);
+
+    const handlePopState = (e) => {
+      const p = e.state?.page || "landing";
+      setPage(p);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const navigateTo = (newPage) => {
+    window.history.pushState({ page: newPage }, "", window.location.pathname);
+    setPage(newPage);
+  };
+
+  // Logo always goes to landing
+  const goHome = () => {
+    window.history.pushState({ page: "landing" }, "", window.location.pathname);
+    setPage("landing");
+  };
+
+  // ─── Keyboard shortcut: Escape to go back ───
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === "Escape" && page !== "landing") window.history.back();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [page]);
+
   const handleAnalyze = async () => {
     if (!resumeText.trim() || !jdText.trim()) { setError("Please fill in both fields."); return; }
     try {
@@ -370,7 +466,7 @@ export default function App() {
       const { data } = await axios.post(`${API_BASE}/api/analyze`, { resume_text: resumeText, jd_text: jdText });
       setAnalysisResult(data);
       setSelectedKeywords([]);
-      setPage("analyze");
+      navigateTo("analyze");
     } catch { setError("Request failed. Please check backend and try again."); }
     finally { setAnalyzing(false); }
   };
@@ -383,13 +479,12 @@ export default function App() {
       setError(""); setGenerating(true); setAfterScore(null);
       const { data } = await axios.post(`${API_BASE}/api/generate`, { resume_text: resumeText, jd_text: jdText, gaps, mode });
       setGeneratedResult(data);
-      setPage("compare");
-      // Re-score optimized resume
+      navigateTo("compare");
       try {
         const cleanedText = data.optimized_resume.replace(/\[NEW\]/g, "");
         const { data: newScore } = await axios.post(`${API_BASE}/api/analyze`, { resume_text: cleanedText, jd_text: jdText });
         setAfterScore(newScore);
-      } catch (e) { 
+      } catch (e) {
         console.error("Re-scoring failed", e);
         setAfterScore({ overall_score: null });
       }
@@ -400,8 +495,16 @@ export default function App() {
   if (analyzing) return <TypewriterLoading isAnalyzing={true} />;
   if (generating) return <TypewriterLoading isAnalyzing={false} />;
 
-  if (page === "landing") return <LandingPage onBegin={() => setPage("upload")} toggleLanguage={toggleLanguage} lang={lang} />;
-  if (page === "upload") return <UploadPage resumeText={resumeText} setResumeText={setResumeText} jdText={jdText} setJdText={setJdText} onAnalyze={handleAnalyze} loading={analyzing} error={error} toggleLanguage={toggleLanguage} lang={lang} />;
-  if (page === "analyze") return <AnalyzePage analysisResult={analysisResult} onGenerate={handleGenerate} loading={generating} toggleLanguage={toggleLanguage} lang={lang} onBack={() => setPage("upload")} selectedKeywords={selectedKeywords} setSelectedKeywords={setSelectedKeywords} />;
-  if (page === "compare") return <ComparePage resumeText={resumeText} jdText={jdText} generatedResult={generatedResult} analysisResult={analysisResult} afterScore={afterScore} onBack={() => setPage("analyze")} onRegenerate={handleGenerate} loading={generating} toggleLanguage={toggleLanguage} lang={lang} mode={mode} setMode={setMode} apiBase={API_BASE} selectedGapsData={selectedGapsData} />;
+  if (page === "landing") return <LandingPage onBegin={() => {
+    setResumeText("");
+    setJdText("");
+    setAnalysisResult(null);
+    setGeneratedResult(null);
+    setAfterScore(null);
+    setSelectedKeywords([]);
+    navigateTo("upload");
+  }} toggleLanguage={toggleLanguage} lang={lang} />;
+  if (page === "upload") return <UploadPage resumeText={resumeText} setResumeText={setResumeText} jdText={jdText} setJdText={setJdText} onAnalyze={handleAnalyze} loading={analyzing} error={error} toggleLanguage={toggleLanguage} lang={lang} onLogoClick={goHome} />;
+  if (page === "analyze") return <AnalyzePage analysisResult={analysisResult} onGenerate={handleGenerate} loading={generating} toggleLanguage={toggleLanguage} lang={lang} onLogoClick={goHome} selectedKeywords={selectedKeywords} setSelectedKeywords={setSelectedKeywords} />;
+  if (page === "compare") return <ComparePage resumeText={resumeText} jdText={jdText} generatedResult={generatedResult} analysisResult={analysisResult} afterScore={afterScore} onRegenerate={handleGenerate} loading={generating} toggleLanguage={toggleLanguage} lang={lang} mode={mode} setMode={setMode} apiBase={API_BASE} selectedGapsData={selectedGapsData} onLogoClick={goHome} />;
 }
