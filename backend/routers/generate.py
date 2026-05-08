@@ -265,24 +265,44 @@ def _build_docx_structured(data: dict, pages: int = 1) -> bytes:
     return buf.getvalue()
 
 
-@router.post("/generate-docx")
-def generate_docx_endpoint(payload: GenerateRequest, pages: int = 2):
-    gaps_dicts = [g.model_dump() for g in payload.gaps]
+from pydantic import BaseModel as PM
+
+class DocxFromTextRequest(PM):
+    optimized_text: str
+    pages: int = 2
+
+@router.post("/generate-docx-text")
+def generate_docx_from_text(payload: DocxFromTextRequest):
     try:
-        structured = generate_resume_structured(
-            resume_text=payload.resume_text,
-            jd_text=payload.jd_text,
-            gaps=gaps_dicts,           mode=payload.mode,
-        )
-        docx_bytes = _build_docx_structured(structured, pages=pages)
+        # Convert plain text to simple docx
+        doc = Document()
+        section = doc.sections[0]
+        section.page_width = Inches(8.5)
+        section.page_height = Inches(11)
+        margin = Inches(0.75) if payload.pages >= 2 else Inches(0.6)
+        section.top_margin = section.bottom_margin = margin
+        section.left_margin = section.right_margin = margin
+        
+        for line in payload.optimized_text.split("\n"):
+            clean = line.replace("[NEW]", "").strip()
+            if not clean:
+                doc.add_paragraph()
+                continue
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            run = p.add_run(clean)
+            run.font.name = "Arial"
+            run.font.size = Pt(10)
+        
+        buf = BytesIO()
+        doc.save(buf)
         return Response(
-            content=docx_bytes,
+            content=buf.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f"attachment; filename=optimized_resume_{pages}page.docx"},
+            headers={"Content-Disposition": "attachment; filename=optimized_resume.docx"},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
 
 from pydantic import BaseModel
 class StructuredDocxRequest(BaseModel):

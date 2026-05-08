@@ -242,7 +242,7 @@ function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, l
                     const formData = new FormData();
                     formData.append("file", file);
                     try {
-                      const res = await fetch(`${API_BASE}/parse-pdf`, { method: "POST", body: formData });
+                      const res = await fetch(`${API_BASE}/api/parse-pdf`, { method: "POST", body: formData });
                       const data = await res.json();
                       if (data.text) { setResumeText(data.text); setPdfSuccess(true); }
                       else alert("Could not extract text from PDF. Please paste manually.");
@@ -399,10 +399,13 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const res = await fetch(`${apiBase}/api/generate-docx?pages=${pages}`, {
+      const res = await fetch(`${apiBase}/api/generate-docx-text`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume_text: resumeText, jd_text: jdText, gaps: selectedGapsData || analysisResult?.gaps || [], mode }),
+        body: JSON.stringify({ 
+          optimized_text: optimized.replace(/\[NEW\]/g, ""),
+          pages: pages 
+        }),
       });
       if (!res.ok) throw new Error("failed");
       const blob = await res.blob();

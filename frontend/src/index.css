@@ -387,8 +387,7 @@ body {
 }
 
 .compare-content {
-  overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  overflow: hidden;
 }
 
 .compare-cols {
@@ -399,6 +398,8 @@ body {
 
 .compare-col {
   border-right: 1px solid var(--border);
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
 }
 
 .compare-col-header {
