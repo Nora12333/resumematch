@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { useLanguage } from "./hooks/useLanguage";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -31,7 +30,6 @@ function AnimatedSection({ children, delay = 0 }) {
   );
 }
 
-// ─── Page Transition Wrapper ───
 function PageWrapper({ children }) {
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 20); return () => clearTimeout(t); }, []);
@@ -42,7 +40,6 @@ function PageWrapper({ children }) {
   );
 }
 
-// ─── Step Bar ───
 function StepBar({ step }) {
   const steps = ["Upload", "Analyze", "Compare"];
   return (
@@ -61,7 +58,6 @@ function StepBar({ step }) {
   );
 }
 
-// ─── Typewriter Loading ───
 const ANALYZE_LINES = ["Reading your resume...", "Parsing job description...", "Identifying skill requirements...", "Analyzing experience alignment...", "Scoring keyword matches...", "Calculating match score...", "Finalizing analysis..."];
 const GENERATE_LINES = ["Understanding your profile...", "Identifying improvement areas...", "Crafting targeted bullet points...", "Refining language and tone...", "Aligning with job requirements...", "Adding strategic keywords...", "Polishing your resume..."];
 
@@ -107,17 +103,13 @@ function TypewriterLoading({ isAnalyzing }) {
   );
 }
 
-// ─── Landing Page ───
-function LandingPage({ onBegin, toggleLanguage, lang }) {
+function LandingPage({ onBegin }) {
   return (
     <PageWrapper>
       <div className="landing">
         <nav className="landing-nav">
           <span className="logo">ResumeMatch</span>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
-            <button className="begin-btn" onClick={onBegin}>Begin</button>
-          </div>
+          <button className="begin-btn" onClick={onBegin}>Begin</button>
         </nav>
 
         <section className="hero">
@@ -211,44 +203,70 @@ function LandingPage({ onBegin, toggleLanguage, lang }) {
   );
 }
 
-// ─── Upload Page ───
-function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, loading, error, toggleLanguage, lang, onLogoClick }) {
+function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, loading, error, onLogoClick }) {
+  const [pdfSuccess, setPdfSuccess] = useState(false);
+  const resumeWords = resumeText.trim() ? resumeText.trim().split(/\s+/).length : 0;
+  const jdWords = jdText.trim() ? jdText.trim().split(/\s+/).length : 0;
+
   return (
     <PageWrapper>
       <div className="page">
         <nav className="app-nav">
           <span className="logo" onClick={onLogoClick} style={{ cursor: "pointer" }}>ResumeMatch</span>
-          <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
         </nav>
         <StepBar step={1} />
         <div className="page-body">
-          <div className="page-heading"><h1 className="page-title">Upload Your Information</h1><p className="page-sub">Paste your resume and the job description to begin analysis</p></div>
+          <div className="page-heading">
+            <h1 className="page-title">Upload Your Information</h1>
+            <p className="page-sub">Paste your resume and the job description to begin analysis</p>
+          </div>
           {error && <div className="error-box">{error}</div>}
           <div className="two-col">
-          <div className="input-group">
-  <label className="input-label">Your Resume</label>
-  <textarea className="big-textarea" placeholder="Paste your resume text here..." value={resumeText} onChange={e => setResumeText(e.target.value)} />
-  <label className="upload-file-btn">
-    📄 Upload PDF
-    <input type="file" accept=".pdf" style={{display:"none"}}
-      onChange={async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const formData = new FormData();
-        formData.append("file", file);
-        try {
-          const res = await fetch(`${API_BASE}/api/parse-pdf`, {method:"POST", body: formData});
-          const data = await res.json();
-          if (data.text) setResumeText(data.text);
-        } catch { alert("Failed to parse PDF. Please paste text manually."); }
-      }}
-    />
-  </label>
-</div>
-            <div className="input-group"><label className="input-label">Job Description</label><textarea className="big-textarea" placeholder="Paste the job description here..." value={jdText} onChange={e => setJdText(e.target.value)} /></div>
+            <div className="input-group">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label className="input-label">Your Resume</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {pdfSuccess && <span style={{ fontSize: 12, color: "#16a34a" }}>✓ PDF uploaded</span>}
+                  <span style={{ fontSize: 12, color: "var(--muted)" }}>{resumeWords} words</span>
+                  {resumeText && <button onClick={() => { setResumeText(""); setPdfSuccess(false); }} style={{ fontSize: 12, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
+                </div>
+              </div>
+              <textarea className="big-textarea" placeholder="Paste your resume text here..."
+                value={resumeText} onChange={e => setResumeText(e.target.value)} />
+              <label className="upload-file-btn">
+                📄 Upload PDF
+                <input type="file" accept=".pdf" style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    try {
+                      const res = await fetch(`${API_BASE}/parse-pdf`, { method: "POST", body: formData });
+                      const data = await res.json();
+                      if (data.text) { setResumeText(data.text); setPdfSuccess(true); }
+                      else alert("Could not extract text from PDF. Please paste manually.");
+                    } catch { alert("Failed to parse PDF. Please paste text manually."); }
+                  }}
+                />
+              </label>
+            </div>
+            <div className="input-group">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label className="input-label">Job Description</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "var(--muted)" }}>{jdWords} words</span>
+                  {jdText && <button onClick={() => setJdText("")} style={{ fontSize: 12, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
+                </div>
+              </div>
+              <textarea className="big-textarea" placeholder="Paste the job description here..."
+                value={jdText} onChange={e => setJdText(e.target.value)} />
+            </div>
           </div>
           <div style={{ display: "flex", justifyContent: "center", marginTop: 32 }}>
-            <button className="navy-btn large" onClick={onAnalyze} disabled={loading}>{loading ? "Analyzing..." : "Analyze Resume →"}</button>
+            <button className="navy-btn large" onClick={onAnalyze} disabled={loading}>
+              {loading ? "Analyzing..." : "Analyze Resume →"}
+            </button>
           </div>
         </div>
       </div>
@@ -256,8 +274,7 @@ function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, l
   );
 }
 
-// ─── Analyze Page ───
-function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang, onLogoClick, selectedKeywords, setSelectedKeywords }) {
+function AnalyzePage({ analysisResult, onGenerate, loading, onLogoClick, selectedKeywords, setSelectedKeywords }) {
   const overall = analysisResult?.overall_score ?? 0;
   const skill = analysisResult?.skill_score ?? 0;
   const exp = analysisResult?.experience_score ?? 0;
@@ -271,38 +288,50 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
 
   const selectedGapsData = gaps.filter(g => selectedKeywords.includes(g.skill));
 
+  const scoreColor = (v) => v >= 75 ? "#16a34a" : v >= 50 ? "#d97706" : "#dc2626";
+
   return (
     <PageWrapper>
       <div className="page">
         <nav className="app-nav">
           <span className="logo" onClick={onLogoClick} style={{ cursor: "pointer" }}>ResumeMatch</span>
-          <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
         </nav>
         <StepBar step={2} />
         <div className="page-body">
-          <div className="page-heading"><h1 className="page-title">Analysis Results</h1><p className="page-sub">Here's how your resume matches the job description</p></div>
+          <div className="page-heading">
+            <h1 className="page-title">Analysis Results</h1>
+            <p className="page-sub">Here's how your resume matches the job description</p>
+          </div>
           <div className="score-cards">
             {[{ label: "OVERALL SCORE", value: overall }, { label: "SKILL SCORE", value: skill }, { label: "EXPERIENCE SCORE", value: exp }].map(s => (
               <div key={s.label} className="score-card">
                 <div className="sc-label">{s.label}</div>
-                <div className="sc-value">{s.value}%</div>
-                <div className="sc-bar-bg"><div className="sc-bar-fill" style={{ width: `${s.value}%` }} /></div>
+                <div className="sc-value" style={{ color: scoreColor(s.value) }}>{s.value}%</div>
+                <div className="sc-bar-bg">
+                  <div className="sc-bar-fill" style={{ width: `${s.value}%`, background: scoreColor(s.value) }} />
+                </div>
               </div>
             ))}
           </div>
           <div className="two-col" style={{ marginTop: 40 }}>
             <div>
               <h2 className="section-h2">Skill Gaps</h2>
+              <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>These skills are missing or underrepresented in your resume.</p>
               <div className="gaps-list">
                 {ungappedGaps.map((g, i) => (
-                  <div key={i} className="gap-row">
+                  <div key={i} className="gap-row" style={{flexDirection:"column", alignItems:"flex-start", gap:4}}>
+                  <div style={{display:"flex", justifyContent:"space-between", width:"100%", alignItems:"center"}}>
                     <span className="gap-name">{g.skill}</span>
                     <span className={`gap-badge ${g.importance === "required" ? "high" : "medium"}`}>
                       {g.importance === "required" ? "High" : "Medium"}
                     </span>
                   </div>
+                  {g.suggestion_en && (
+                    <p style={{fontSize:12, color:"var(--muted)", lineHeight:1.5, paddingBottom:4}}>{g.suggestion_en}</p>
+                  )}
+                </div>
                 ))}
-                {ungappedGaps.length === 0 && <p style={{ color: "#6b7280", fontSize: 14, padding: 16 }}>No major gaps found!</p>}
+                {ungappedGaps.length === 0 && <p style={{ color: "#16a34a", fontSize: 14, padding: 16, fontWeight: 600 }}>✓ No major gaps found!</p>}
               </div>
             </div>
             <div>
@@ -323,7 +352,7 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
               </div>
               {selectedKeywords.length > 0 && (
                 <p style={{ fontSize: 13, color: "var(--navy)", marginTop: 12, fontWeight: 600 }}>
-                  {selectedKeywords.length} keyword{selectedKeywords.length > 1 ? "s" : ""} selected
+                  {selectedKeywords.length} keyword{selectedKeywords.length > 1 ? "s" : ""} selected to add
                 </p>
               )}
             </div>
@@ -339,11 +368,11 @@ function AnalyzePage({ analysisResult, onGenerate, loading, toggleLanguage, lang
   );
 }
 
-// ─── Compare Page ───
-function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afterScore, onRegenerate, loading, toggleLanguage, lang, mode, setMode, apiBase, selectedGapsData, onLogoClick }) {
+function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afterScore, onRegenerate, loading, mode, setMode, apiBase, selectedGapsData, onLogoClick }) {
   const optimized = generatedResult?.optimized_resume || "";
   const [downloading, setDownloading] = useState(false);
   const [pages, setPages] = useState(2);
+  const [copied, setCopied] = useState(false);
   const overallBefore = analysisResult?.overall_score ?? 0;
   const overallAfter = afterScore?.overall_score ?? null;
   const improvement = overallAfter !== null ? overallAfter - overallBefore : null;
@@ -358,6 +387,13 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
       }
       return <span key={i}>{part}</span>;
     });
+  };
+
+  const handleCopy = async () => {
+    const cleanText = optimized.replace(/\[NEW\]/g, "");
+    await navigator.clipboard.writeText(cleanText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = async () => {
@@ -378,24 +414,31 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
     finally { setDownloading(false); }
   };
 
+  const scoreColor = (v) => v >= 75 ? "#16a34a" : v >= 50 ? "#d97706" : "#dc2626";
+
   return (
     <PageWrapper>
       <div className="page">
         <nav className="app-nav">
           <span className="logo" onClick={onLogoClick} style={{ cursor: "pointer" }}>ResumeMatch</span>
-          <button className="lang-btn" onClick={toggleLanguage}>{lang === "en" ? "中文" : "English"}</button>
         </nav>
         <StepBar step={3} />
-        <div className="compare-header"><h1 className="page-title">Compare Results</h1><p className="page-sub">See the improvements made to your resume</p></div>
+        <div className="compare-header">
+          <h1 className="page-title">Compare Results</h1>
+          <p className="page-sub">See the improvements made to your resume</p>
+        </div>
         <div className="compare-layout">
           <div className="compare-content">
             <div className="compare-cols">
               <div className="compare-col">
                 <div className="compare-col-header"><h2 className="col-title">Original Resume</h2></div>
-                <div className="resume-doc">{originalLines.map((line, i) => <div key={i} className="resume-line-row">{line || "\u00A0"}</div>)}</div>
+                <div className="resume-doc" style={{whiteSpace:"pre-wrap", fontFamily:"'Courier New', monospace", fontSize:"12.5px", lineHeight:"1.8"}}>{resumeText}</div>
               </div>
               <div className="compare-col highlight-col">
-                <div className="compare-col-header"><h2 className="col-title">Optimized Resume</h2><span className="improved-badge">↗ Improved</span></div>
+                <div className="compare-col-header">
+                  <h2 className="col-title">Optimized Resume</h2>
+                  <span className="improved-badge">↗ Improved</span>
+                </div>
                 <div className="resume-doc" style={{ whiteSpace: "pre-wrap", fontFamily: "'Courier New', monospace", fontSize: "12.5px", lineHeight: "1.8" }}>{renderLine(optimized)}</div>
               </div>
             </div>
@@ -403,10 +446,15 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
           <div className="compare-sidebar">
             <h2 className="col-title">Score Comparison</h2>
             <div className="score-compare">
-              <div className="sc-block"><div className="sc-tag">BEFORE</div><div className="sc-num gray">{overallBefore}%</div></div>
+              <div className="sc-block">
+                <div className="sc-tag">BEFORE</div>
+                <div className="sc-num gray">{overallBefore}%</div>
+              </div>
               <div className="sc-block">
                 <div className="sc-tag">AFTER</div>
-                <div className="sc-num navy">{overallAfter !== null ? `${overallAfter}%` : <span style={{ fontSize: 16, color: "var(--muted)" }}>Scoring...</span>}</div>
+                <div className="sc-num" style={{ color: overallAfter !== null ? scoreColor(overallAfter) : "var(--muted)", fontFamily: "'Playfair Display', serif", fontSize: 44, fontWeight: 700, letterSpacing: -2 }}>
+                  {overallAfter !== null ? `${overallAfter}%` : <span style={{ fontSize: 16 }}>Scoring...</span>}
+                </div>
               </div>
               {improvement !== null && (
                 <div className="sc-imp-block">
@@ -417,10 +465,30 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
               )}
             </div>
             <div className="sidebar-controls">
-              <div className="ctrl-row"><span className="ctrl-label">Mode</span><select className="ctrl-select" value={mode} onChange={e => setMode(e.target.value)}><option value="smart_fill">Smart Fill</option><option value="full_rewrite">Full Rewrite</option></select></div>
-              <div className="ctrl-row"><span className="ctrl-label">Pages</span><div className="pages-btns">{[1, 2, 3].map(n => <button key={n} className={`pg-btn ${pages === n ? "active" : ""}`} onClick={() => setPages(n)}>{n}</button>)}</div></div>
-              <button className="navy-btn full" onClick={handleDownload} disabled={!optimized || downloading}>{downloading ? "Generating..." : "⬇ Download Resume"}</button>
-              <button className="outline-btn-navy full" onClick={() => onRegenerate(selectedGapsData)} disabled={loading}>{loading ? "Regenerating..." : "Regenerate"}</button>
+              <div className="ctrl-row">
+                <span className="ctrl-label">Mode</span>
+                <select className="ctrl-select" value={mode} onChange={e => setMode(e.target.value)}>
+                  <option value="smart_fill">Smart Fill</option>
+                  <option value="full_rewrite">Full Rewrite</option>
+                </select>
+              </div>
+              <div className="ctrl-row">
+                <span className="ctrl-label">Pages</span>
+                <div className="pages-btns">
+                  {[1, 2, 3].map(n => (
+                    <button key={n} className={`pg-btn ${pages === n ? "active" : ""}`} onClick={() => setPages(n)}>{n}</button>
+                  ))}
+                </div>
+              </div>
+              <button className="navy-btn full" onClick={handleDownload} disabled={!optimized || downloading}>
+                {downloading ? "Generating..." : "⬇ Download Word"}
+              </button>
+              <button className="outline-btn-navy full" onClick={handleCopy} disabled={!optimized}>
+                {copied ? "✓ Copied!" : "Copy Text"}
+              </button>
+              <button className="outline-btn-navy full" onClick={() => onRegenerate(selectedGapsData)} disabled={loading}>
+                {loading ? "Regenerating..." : "Regenerate"}
+              </button>
             </div>
           </div>
         </div>
@@ -429,9 +497,7 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
   );
 }
 
-// ─── Main App ───
 export default function App() {
-  const { lang, toggleLanguage } = useLanguage();
   const [page, setPage] = useState("landing");
   const [resumeText, setResumeText] = useState("");
   const [jdText, setJdText] = useState("");
@@ -445,15 +511,9 @@ export default function App() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
 
-  // ─── Browser history navigation ───
   useEffect(() => {
-    // Set initial history state
     window.history.replaceState({ page: "landing" }, "", window.location.pathname);
-
-    const handlePopState = (e) => {
-      const p = e.state?.page || "landing";
-      setPage(p);
-    };
+    const handlePopState = (e) => { setPage(e.state?.page || "landing"); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -463,17 +523,13 @@ export default function App() {
     setPage(newPage);
   };
 
-  // Logo always goes to landing
   const goHome = () => {
     window.history.pushState({ page: "landing" }, "", window.location.pathname);
     setPage("landing");
   };
 
-  // ─── Keyboard shortcut: Escape to go back ───
   useEffect(() => {
-    const handleKey = (e) => {
-      if (e.key === "Escape" && page !== "landing") window.history.back();
-    };
+    const handleKey = (e) => { if (e.key === "Escape" && page !== "landing") window.history.back(); };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [page]);
@@ -515,15 +571,11 @@ export default function App() {
   if (generating) return <TypewriterLoading isAnalyzing={false} />;
 
   if (page === "landing") return <LandingPage onBegin={() => {
-    setResumeText("");
-    setJdText("");
-    setAnalysisResult(null);
-    setGeneratedResult(null);
-    setAfterScore(null);
-    setSelectedKeywords([]);
+    setResumeText(""); setJdText(""); setAnalysisResult(null);
+    setGeneratedResult(null); setAfterScore(null); setSelectedKeywords([]);
     navigateTo("upload");
-  }} toggleLanguage={toggleLanguage} lang={lang} />;
-  if (page === "upload") return <UploadPage resumeText={resumeText} setResumeText={setResumeText} jdText={jdText} setJdText={setJdText} onAnalyze={handleAnalyze} loading={analyzing} error={error} toggleLanguage={toggleLanguage} lang={lang} onLogoClick={goHome} />;
-  if (page === "analyze") return <AnalyzePage analysisResult={analysisResult} onGenerate={handleGenerate} loading={generating} toggleLanguage={toggleLanguage} lang={lang} onLogoClick={goHome} selectedKeywords={selectedKeywords} setSelectedKeywords={setSelectedKeywords} />;
-  if (page === "compare") return <ComparePage resumeText={resumeText} jdText={jdText} generatedResult={generatedResult} analysisResult={analysisResult} afterScore={afterScore} onRegenerate={handleGenerate} loading={generating} toggleLanguage={toggleLanguage} lang={lang} mode={mode} setMode={setMode} apiBase={API_BASE} selectedGapsData={selectedGapsData} onLogoClick={goHome} />;
+  }} />;
+  if (page === "upload") return <UploadPage resumeText={resumeText} setResumeText={setResumeText} jdText={jdText} setJdText={setJdText} onAnalyze={handleAnalyze} loading={analyzing} error={error} onLogoClick={goHome} />;
+  if (page === "analyze") return <AnalyzePage analysisResult={analysisResult} onGenerate={handleGenerate} loading={generating} onLogoClick={goHome} selectedKeywords={selectedKeywords} setSelectedKeywords={setSelectedKeywords} />;
+  if (page === "compare") return <ComparePage resumeText={resumeText} jdText={jdText} generatedResult={generatedResult} analysisResult={analysisResult} afterScore={afterScore} onRegenerate={handleGenerate} loading={generating} mode={mode} setMode={setMode} apiBase={API_BASE} selectedGapsData={selectedGapsData} onLogoClick={goHome} />;
 }

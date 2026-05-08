@@ -58,6 +58,22 @@ You are an expert resume editor. Your goal is to improve the resume so it sounds
 CORE PRINCIPLE:
 Specific > Abstract.
 
+OPTIMIZATION INTENSITY:
+
+This is not a light proofreading task. Perform a meaningful resume optimization for the target job description.
+
+For each major experience or project, actively rewrite weak or generic bullets to better match the target role, while preserving factual accuracy.
+
+If the original bullet is already strong, improve clarity, keyword alignment, and impact framing.
+If the original bullet is vague, rewrite it substantially using only information already present in the resume.
+
+The optimized resume should show visible improvements in:
+- JD keyword alignment
+- clarity of analytical work
+- strength of action verbs
+- connection between tools, methods, and outcomes
+- readability for recruiters and ATS systems
+
 Every bullet should clearly communicate:
 Action + Method/Tool + Finding, Result, or Purpose.
 
@@ -74,6 +90,22 @@ NOT:
 * Buzzword-heavy
 * Corporate-fluffy
 * Artificially impressive
+
+JOB DESCRIPTION ALIGNMENT:
+
+Before rewriting the resume, infer the most important requirements from the job description, including:
+- technical tools
+- analytical methods
+- reporting/dashboard responsibilities
+- business or healthcare domain keywords
+- stakeholder-facing responsibilities
+- required soft skills only when clearly job-relevant
+
+Then tailor the resume to emphasize matching experience already present in the original resume.
+
+Do not add unsupported experience.
+Do not force keywords into unrelated bullets.
+But when a JD keyword is clearly supported by the resume, incorporate it naturally.
 
 WRITING STYLE:
 
@@ -887,3 +919,52 @@ def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
     buf = BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+    def generate_gap_suggestions(gaps: list[dict], jd_text: str, resume_text: str) -> list[dict]:
+    """Generate intelligent gap recommendations based on JD context."""
+    _load_env()
+    if anthropic is None or not _get_api_key():
+        return gaps
+    
+    gaps_block = "\n".join(f"- {g['skill']} ({g['importance']})" for g in gaps if g.get('importance') != 'covered')
+    
+    user_prompt = f"""You are a resume advisor. For each skill gap below, write a SHORT, specific recommendation (1 sentence max) explaining:
+1. WHY it's a gap (what the JD expects vs what the resume shows)
+2. WHAT to do about it (only if the candidate actually has the experience)
+
+Be honest and specific. Don't recommend adding skills the candidate clearly doesn't have.
+
+Job Description:
+{jd_text[:1500]}
+
+Resume (summary):
+{resume_text[:1500]}
+
+Skill gaps to analyze:
+{gaps_block}
+
+Return ONLY valid JSON, no markdown:
+{{
+  "recommendations": [
+    {{"skill": "skill name", "recommendation": "specific 1-sentence recommendation"}}
+  ]
+}}"""
+
+    client = anthropic.Anthropic(api_key=_get_api_key())
+    try:
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=1000,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        raw = "".join(b.text for b in message.content if b.type == "text")
+        data = _parse_llm_json(raw)
+        recs = {r["skill"].lower(): r["recommendation"] for r in data.get("recommendations", [])}
+        
+        for gap in gaps:
+            skill_lower = gap.get("skill", "").lower()
+            if skill_lower in recs:
+                gap["suggestion_en"] = recs[skill_lower]
+        return gaps
+    except Exception as e:
+        return gaps

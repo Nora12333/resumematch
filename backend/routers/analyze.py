@@ -8,9 +8,12 @@ router = APIRouter(prefix="/api", tags=["analysis"])
 matcher = ResumeMatcher()
 
 
+from services.llm import generate_gap_suggestions
+
 @router.post("/analyze", response_model=AnalyzeResponse)
 def analyze(payload: AnalyzeRequest) -> AnalyzeResponse:
     result = matcher.analyze(payload.resume_text, payload.jd_text)
+    result["gaps"] = generate_gap_suggestions(result["gaps"], payload.jd_text, payload.resume_text)
     return AnalyzeResponse(**result)
 
 import pdfplumber
