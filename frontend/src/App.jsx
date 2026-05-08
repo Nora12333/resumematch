@@ -225,7 +225,26 @@ function UploadPage({ resumeText, setResumeText, jdText, setJdText, onAnalyze, l
           <div className="page-heading"><h1 className="page-title">Upload Your Information</h1><p className="page-sub">Paste your resume and the job description to begin analysis</p></div>
           {error && <div className="error-box">{error}</div>}
           <div className="two-col">
-            <div className="input-group"><label className="input-label">Your Resume</label><textarea className="big-textarea" placeholder="Paste your resume text here..." value={resumeText} onChange={e => setResumeText(e.target.value)} /></div>
+          <div className="input-group">
+  <label className="input-label">Your Resume</label>
+  <textarea className="big-textarea" placeholder="Paste your resume text here..." value={resumeText} onChange={e => setResumeText(e.target.value)} />
+  <label className="upload-file-btn">
+    📄 Upload PDF
+    <input type="file" accept=".pdf" style={{display:"none"}}
+      onChange={async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+          const res = await fetch(`${API_BASE}/api/parse-pdf`, {method:"POST", body: formData});
+          const data = await res.json();
+          if (data.text) setResumeText(data.text);
+        } catch { alert("Failed to parse PDF. Please paste text manually."); }
+      }}
+    />
+  </label>
+</div>
             <div className="input-group"><label className="input-label">Job Description</label><textarea className="big-textarea" placeholder="Paste the job description here..." value={jdText} onChange={e => setJdText(e.target.value)} /></div>
           </div>
           <div style={{ display: "flex", justifyContent: "center", marginTop: 32 }}>
