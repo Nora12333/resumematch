@@ -1,7 +1,21 @@
 from dotenv import load_dotenv
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
 load_dotenv("backend/.env", override=True)
 
 from services.llm import analyze_jd, analyze_resume, score_experience, score_skills
+
+
+def tfidf_score(resume_text: str, jd_text: str) -> float:
+    """Calculate TF-IDF cosine similarity between resume and JD."""
+    try:
+        vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+        tfidf_matrix = vectorizer.fit_transform([resume_text, jd_text])
+        score = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
+        return round(float(score) * 100, 1)
+    except Exception:
+        return 0.0
 
 
 class ResumeMatcher:
@@ -21,14 +35,17 @@ class ResumeMatcher:
             resume_parsed, jd_parsed
         )
 
-        # 第五步：动态权重评分
-        overall_score = self._calculate_score(skill_results, experience_score, jd_parsed)
+        # 第五步：动态权重评分 + TF-IDF 混合
+        llm_score = self._calculate_score(skill_results, experience_score, jd_parsed)
+        tfidf = tfidf_score(resume_text, jd_text)
+        overall_score = round(tfidf * 0.4 + llm_score * 0.6)
 
         # 第六步：构建 gaps
         gaps = self._build_gaps(skill_results)
 
         return {
             "overall_score": max(0, min(100, overall_score)),
+            "tfidf_score": tfidf,
             "skill_score": skill_results["skill_score"],
             "experience_score": max(0, min(100, int(round(experience_score)))),
             "eligibility": eligibility,
