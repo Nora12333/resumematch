@@ -329,18 +329,10 @@ Job requirements:
 {reqs_block}
 """
 
-    groq_key = _get_groq_key()
     anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
     raw_text = ""
-    if groq_key and Groq is not None:
-        gclient = Groq(api_key=groq_key)
-        completion = gclient.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": user_prompt}],
-            max_tokens=32,
-        )
-        raw_text = (completion.choices[0].message.content or "").strip()
-    elif anthropic_key and anthropic is not None:
+    if anthropic_key and anthropic is not None:
         client = anthropic.Anthropic(api_key=anthropic_key)
         try:
             message = client.messages.create(
@@ -353,6 +345,14 @@ Job requirements:
                 raise RuntimeError(f"Claude API error: {e}") from e
             raise
         raw_text = "".join(block.text for block in message.content if block.type == "text").strip()
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=32,
+        )
+        raw_text = (completion.choices[0].message.content or "").strip()
     else:
         raise RuntimeError("No API key available")
 
@@ -408,17 +408,9 @@ Return ONLY valid JSON, no markdown:
 
 The "matches" array MUST have exactly {len(clean_jd)} objects, same order as the numbered JD list above."""
 
-    groq_key = _get_groq_key()
     anthropic_key = _get_api_key()
-    if groq_key and Groq is not None:
-        gclient = Groq(api_key=groq_key)
-        completion = gclient.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": user_prompt}],
-            max_tokens=4096,
-        )
-        raw_text = completion.choices[0].message.content or ""
-    elif anthropic_key and anthropic is not None:
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
         client = anthropic.Anthropic(api_key=anthropic_key)
         try:
             message = client.messages.create(
@@ -431,6 +423,14 @@ The "matches" array MUST have exactly {len(clean_jd)} objects, same order as the
                 raise RuntimeError(f"Claude API error: {e}") from e
             raise
         raw_text = "".join(block.text for block in message.content if block.type == "text")
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=4096,
+        )
+        raw_text = completion.choices[0].message.content or ""
     else:
         raise RuntimeError("No API key available")
 
@@ -525,20 +525,9 @@ Return exactly one JSON object (UTF-8) with:
 
 No markdown code fences. No text before or after the JSON object."""
 
-    groq_key = _get_groq_key()
     anthropic_key = _get_api_key()
-    if groq_key and Groq is not None:
-        gclient = Groq(api_key=groq_key)
-        completion = gclient.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=8192,
-        )
-        raw_text = completion.choices[0].message.content or ""
-    elif anthropic_key and anthropic is not None:
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
         client = anthropic.Anthropic(api_key=anthropic_key)
         try:
             message = client.messages.create(
@@ -555,6 +544,17 @@ No markdown code fences. No text before or after the JSON object."""
         for block in message.content:
             if block.type == "text":
                 raw_text += block.text
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=8192,
+        )
+        raw_text = completion.choices[0].message.content or ""
     else:
         raise RuntimeError("No API key available")
 
@@ -619,17 +619,9 @@ Return ONLY a valid JSON object, no markdown, no explanation:
 Job Description:
 {jd_text}"""
 
-    groq_key = _get_groq_key()
     anthropic_key = _get_api_key()
-    if groq_key and Groq is not None:
-        gclient = Groq(api_key=groq_key)
-        completion = gclient.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": user_prompt}],
-            max_tokens=1000,
-        )
-        raw_text = completion.choices[0].message.content or ""
-    elif anthropic_key and anthropic is not None:
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
         client = anthropic.Anthropic(api_key=anthropic_key)
         try:
             message = client.messages.create(
@@ -645,6 +637,14 @@ Job Description:
         for block in message.content:
             if block.type == "text":
                 raw_text += block.text
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=1000,
+        )
+        raw_text = completion.choices[0].message.content or ""
     else:
         raise RuntimeError("No API key available")
 
@@ -697,17 +697,9 @@ Return ONLY a valid JSON object, no markdown, no explanation:
 Resume:
 {resume_text}"""
 
-    groq_key = _get_groq_key()
     anthropic_key = _get_api_key()
-    if groq_key and Groq is not None:
-        gclient = Groq(api_key=groq_key)
-        completion = gclient.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": user_prompt}],
-            max_tokens=2000,
-        )
-        raw_text = completion.choices[0].message.content or ""
-    elif anthropic_key and anthropic is not None:
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
         client = anthropic.Anthropic(api_key=anthropic_key)
         try:
             message = client.messages.create(
@@ -723,6 +715,14 @@ Resume:
         for block in message.content:
             if block.type == "text":
                 raw_text += block.text
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=2000,
+        )
+        raw_text = completion.choices[0].message.content or ""
     else:
         raise RuntimeError("No API key available")
 
@@ -792,17 +792,9 @@ Return this exact JSON structure:
   ]
 }}"""
 
-    groq_key = _get_groq_key()
     anthropic_key = _get_api_key()
-    if groq_key and Groq is not None:
-        gclient = Groq(api_key=groq_key)
-        completion = gclient.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": user_prompt}],
-            max_tokens=8192,
-        )
-        raw_text = completion.choices[0].message.content or ""
-    elif anthropic_key and anthropic is not None:
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
         client = anthropic.Anthropic(api_key=anthropic_key)
         message = client.messages.create(
             model=MODEL_ID,
@@ -810,6 +802,14 @@ Return this exact JSON structure:
             messages=[{"role": "user", "content": user_prompt}],
         )
         raw_text = "".join(block.text for block in message.content if block.type == "text")
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=8192,
+        )
+        raw_text = completion.choices[0].message.content or ""
     else:
         raise RuntimeError("No API key available")
 
@@ -988,8 +988,8 @@ def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
 def generate_gap_suggestions(gaps: list[dict], jd_text: str, resume_text: str) -> list[dict]:
     """Generate intelligent gap recommendations based on JD context."""
     _load_env()
-    groq_key = _get_groq_key()
     anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
     if not ((anthropic_key and anthropic is not None) or (groq_key and Groq is not None)):
         return gaps
     
@@ -1018,15 +1018,7 @@ Return ONLY valid JSON, no markdown:
 }}"""
 
     try:
-        if groq_key and Groq is not None:
-            gclient = Groq(api_key=groq_key)
-            completion = gclient.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": user_prompt}],
-                max_tokens=1000,
-            )
-            raw = completion.choices[0].message.content or ""
-        elif anthropic_key and anthropic is not None:
+        if anthropic_key and anthropic is not None:
             client = anthropic.Anthropic(api_key=anthropic_key)
             message = client.messages.create(
                 model=MODEL_ID,
@@ -1034,6 +1026,14 @@ Return ONLY valid JSON, no markdown:
                 messages=[{"role": "user", "content": user_prompt}],
             )
             raw = "".join(b.text for b in message.content if b.type == "text")
+        elif groq_key and Groq is not None:
+            gclient = Groq(api_key=groq_key)
+            completion = gclient.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": user_prompt}],
+                max_tokens=1000,
+            )
+            raw = completion.choices[0].message.content or ""
         else:
             return gaps
         data = _parse_llm_json(raw)
