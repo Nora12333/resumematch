@@ -399,12 +399,15 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const res = await fetch(`${apiBase}/api/generate-docx-text`, {
+      const res = await fetch(`${apiBase}/api/generate-docx?pages=${pages}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           optimized_text: optimized.replace(/\[NEW\]/g, ""),
-          pages: pages 
+          resume_text: resumeText,
+          jd_text: jdText,
+          gaps: selectedGapsData || [],
+          mode: mode
         }),
       });
       if (!res.ok) throw new Error("failed");
