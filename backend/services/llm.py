@@ -11,6 +11,11 @@ try:
 except ImportError:  # pragma: no cover
     anthropic = None
 
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
+
 MODEL_ID = "claude-sonnet-4-20250514"
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -247,6 +252,18 @@ def _get_api_key() -> str | None:
     return key or None
 
 
+def _get_groq_key() -> str | None:
+    _load_env()
+    return os.environ.get("GROQ_API_KEY", "").strip() or None
+
+
+def _get_groq_client():
+    key = _get_groq_key()
+    if not key or Groq is None:
+        return None
+    return Groq(api_key=key)
+
+
 def _format_gaps_for_prompt(gaps: list[dict[str, Any]]) -> str:
     lines = []
     for g in gaps:
@@ -292,11 +309,6 @@ def score_experience(resume_bullets: list[str], jd_requirements: list[str]) -> f
     Returns a numeric score in [0, 100].
     """
     _load_env()
-    if anthropic is None:
-        raise RuntimeError("anthropic package is not installed")
-    api_key = _get_api_key()
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     clean_bullets = [b.strip() for b in resume_bullets if isinstance(b, str) and b.strip()]
     clean_requirements = [r.strip() for r in jd_requirements if isinstance(r, str) and r.strip()]
@@ -317,19 +329,33 @@ Job requirements:
 {reqs_block}
 """
 
-    client = anthropic.Anthropic(api_key=api_key)
-    try:
-        message = client.messages.create(
-            model=MODEL_ID,
-            max_tokens=32,
+    anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
+    raw_text = ""
+    if anthropic_key and anthropic is not None:
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        try:
+            message = client.messages.create(
+                model=MODEL_ID,
+                max_tokens=32,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+        except Exception as e:
+            if _is_anthropic_error(e):
+                raise RuntimeError(f"Claude API error: {e}") from e
+            raise
+        raw_text = "".join(block.text for block in message.content if block.type == "text").strip()
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=32,
         )
-    except Exception as e:
-        if _is_anthropic_error(e):
-            raise RuntimeError(f"Claude API error: {e}") from e
-        raise
+        raw_text = (completion.choices[0].message.content or "").strip()
+    else:
+        raise RuntimeError("No API key available")
 
-    raw_text = "".join(block.text for block in message.content if block.type == "text").strip()
     if not raw_text:
         raise ValueError("Empty response from Claude while scoring experience")
 
@@ -349,11 +375,6 @@ def score_skills(
     3) missing: no relevant experience at all
     """
     _load_env()
-    if anthropic is None:
-        raise RuntimeError("anthropic package is not installed")
-    api_key = _get_api_key()
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     clean_resume = [
         s.strip() for s in resume_skills if isinstance(s, str) and s.strip()
@@ -387,19 +408,32 @@ Return ONLY valid JSON, no markdown:
 
 The "matches" array MUST have exactly {len(clean_jd)} objects, same order as the numbered JD list above."""
 
-    client = anthropic.Anthropic(api_key=api_key)
-    try:
-        message = client.messages.create(
-            model=MODEL_ID,
-            max_tokens=4096,
+    anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        try:
+            message = client.messages.create(
+                model=MODEL_ID,
+                max_tokens=4096,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+        except Exception as e:
+            if _is_anthropic_error(e):
+                raise RuntimeError(f"Claude API error: {e}") from e
+            raise
+        raw_text = "".join(block.text for block in message.content if block.type == "text")
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=4096,
         )
-    except Exception as e:
-        if _is_anthropic_error(e):
-            raise RuntimeError(f"Claude API error: {e}") from e
-        raise
+        raw_text = completion.choices[0].message.content or ""
+    else:
+        raise RuntimeError("No API key available")
 
-    raw_text = "".join(block.text for block in message.content if block.type == "text")
     if not raw_text.strip():
         raise ValueError("Empty response from Claude while scoring skills")
 
@@ -456,12 +490,6 @@ def generate_resume(
     Raises RuntimeError if API key missing, package missing, or Claude API fails.
     """
     _load_env()
-    if anthropic is None:
-        raise RuntimeError("anthropic package is not installed")
-
-    api_key = _get_api_key()
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     system = SYSTEM_PROMPT_SMART_FILL if mode == "smart_fill" else SYSTEM_PROMPT_FULL_REWRITE
     gaps_block = _format_gaps_for_prompt(gaps)
@@ -497,23 +525,38 @@ Return exactly one JSON object (UTF-8) with:
 
 No markdown code fences. No text before or after the JSON object."""
 
-    client = anthropic.Anthropic(api_key=api_key)
-    try:
-        message = client.messages.create(
-            model=MODEL_ID,
+    anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        try:
+            message = client.messages.create(
+                model=MODEL_ID,
+                max_tokens=8192,
+                system=system,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+        except Exception as e:
+            if _is_anthropic_error(e):
+                raise RuntimeError(f"Claude API error: {e}") from e
+            raise
+        raw_text = ""
+        for block in message.content:
+            if block.type == "text":
+                raw_text += block.text
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
             max_tokens=8192,
-            system=system,
-            messages=[{"role": "user", "content": user_prompt}],
         )
-    except Exception as e:
-        if _is_anthropic_error(e):
-            raise RuntimeError(f"Claude API error: {e}") from e
-        raise
-
-    raw_text = ""
-    for block in message.content:
-        if block.type == "text":
-            raw_text += block.text
+        raw_text = completion.choices[0].message.content or ""
+    else:
+        raise RuntimeError("No API key available")
 
     if not raw_text.strip():
         raise ValueError("Empty response from Claude")
@@ -543,11 +586,6 @@ def analyze_jd(jd_text: str) -> dict[str, Any]:
     用 Claude 解析 JD，返回结构化 JSON。
     """
     _load_env()
-    if anthropic is None:
-        raise RuntimeError("anthropic package is not installed")
-    api_key = _get_api_key()
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     user_prompt = f"""You are a structured job description parser.
 
@@ -581,22 +619,34 @@ Return ONLY a valid JSON object, no markdown, no explanation:
 Job Description:
 {jd_text}"""
 
-    client = anthropic.Anthropic(api_key=api_key)
-    try:
-        message = client.messages.create(
-            model=MODEL_ID,
-            max_tokens=1000,
+    anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        try:
+            message = client.messages.create(
+                model=MODEL_ID,
+                max_tokens=1000,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+        except Exception as e:
+            if _is_anthropic_error(e):
+                raise RuntimeError(f"Claude API error: {e}") from e
+            raise
+        raw_text = ""
+        for block in message.content:
+            if block.type == "text":
+                raw_text += block.text
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=1000,
         )
-    except Exception as e:
-        if _is_anthropic_error(e):
-            raise RuntimeError(f"Claude API error: {e}") from e
-        raise
-
-    raw_text = ""
-    for block in message.content:
-        if block.type == "text":
-            raw_text += block.text
+        raw_text = completion.choices[0].message.content or ""
+    else:
+        raise RuntimeError("No API key available")
 
     return _parse_llm_json(raw_text)
 
@@ -606,11 +656,6 @@ def analyze_resume(resume_text: str) -> dict[str, Any]:
     用 Claude 解析简历，返回结构化 JSON。
     """
     _load_env()
-    if anthropic is None:
-        raise RuntimeError("anthropic package is not installed")
-    api_key = _get_api_key()
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     user_prompt = f"""You are a structured resume parser.
 
@@ -652,22 +697,34 @@ Return ONLY a valid JSON object, no markdown, no explanation:
 Resume:
 {resume_text}"""
 
-    client = anthropic.Anthropic(api_key=api_key)
-    try:
-        message = client.messages.create(
-            model=MODEL_ID,
-            max_tokens=2000,
+    anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        try:
+            message = client.messages.create(
+                model=MODEL_ID,
+                max_tokens=2000,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+        except Exception as e:
+            if _is_anthropic_error(e):
+                raise RuntimeError(f"Claude API error: {e}") from e
+            raise
+        raw_text = ""
+        for block in message.content:
+            if block.type == "text":
+                raw_text += block.text
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=2000,
         )
-    except Exception as e:
-        if _is_anthropic_error(e):
-            raise RuntimeError(f"Claude API error: {e}") from e
-        raise
-
-    raw_text = ""
-    for block in message.content:
-        if block.type == "text":
-            raw_text += block.text
+        raw_text = completion.choices[0].message.content or ""
+    else:
+        raise RuntimeError("No API key available")
 
     return _parse_llm_json(raw_text)
 def generate_resume_structured(
@@ -677,11 +734,6 @@ def generate_resume_structured(
     mode: Literal["smart_fill", "full_rewrite"],
 ) -> dict[str, Any]:
     _load_env()
-    if anthropic is None:
-        raise RuntimeError("anthropic package is not installed")
-    api_key = _get_api_key()
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     gaps_block = _format_gaps_for_prompt(gaps)
 
@@ -740,14 +792,27 @@ Return this exact JSON structure:
   ]
 }}"""
 
-    client = anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model=MODEL_ID,
-        max_tokens=8192,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
+    anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
+    if anthropic_key and anthropic is not None:
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        message = client.messages.create(
+            model=MODEL_ID,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        raw_text = "".join(block.text for block in message.content if block.type == "text")
+    elif groq_key and Groq is not None:
+        gclient = Groq(api_key=groq_key)
+        completion = gclient.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=8192,
+        )
+        raw_text = completion.choices[0].message.content or ""
+    else:
+        raise RuntimeError("No API key available")
 
-    raw_text = "".join(block.text for block in message.content if block.type == "text")
     if not raw_text.strip():
         raise ValueError("Empty response from Claude")
 
@@ -923,7 +988,9 @@ def _build_docx_structured(data: dict, pages: int = 2) -> bytes:
 def generate_gap_suggestions(gaps: list[dict], jd_text: str, resume_text: str) -> list[dict]:
     """Generate intelligent gap recommendations based on JD context."""
     _load_env()
-    if anthropic is None or not _get_api_key():
+    anthropic_key = _get_api_key()
+    groq_key = _get_groq_key()
+    if not ((anthropic_key and anthropic is not None) or (groq_key and Groq is not None)):
         return gaps
     
     gaps_block = "\n".join(f"- {g['skill']} ({g['importance']})" for g in gaps if g.get('importance') != 'covered')
@@ -950,14 +1017,25 @@ Return ONLY valid JSON, no markdown:
   ]
 }}"""
 
-    client = anthropic.Anthropic(api_key=_get_api_key())
     try:
-        message = client.messages.create(
-            model=MODEL_ID,
-            max_tokens=1000,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        raw = "".join(b.text for b in message.content if b.type == "text")
+        if anthropic_key and anthropic is not None:
+            client = anthropic.Anthropic(api_key=anthropic_key)
+            message = client.messages.create(
+                model=MODEL_ID,
+                max_tokens=1000,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = "".join(b.text for b in message.content if b.type == "text")
+        elif groq_key and Groq is not None:
+            gclient = Groq(api_key=groq_key)
+            completion = gclient.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": user_prompt}],
+                max_tokens=1000,
+            )
+            raw = completion.choices[0].message.content or ""
+        else:
+            return gaps
         data = _parse_llm_json(raw)
         recs = {r["skill"].lower(): r["recommendation"] for r in data.get("recommendations", [])}
         
