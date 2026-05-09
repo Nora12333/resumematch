@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from io import BytesIO
 from docx import Document
@@ -270,6 +270,40 @@ from pydantic import BaseModel as PM
 class DocxFromTextRequest(PM):
     optimized_text: str
     pages: int = 2
+
+
+@router.post("/generate-docx")
+async def generate_docx_endpoint(request: Request, pages: int = 2):
+    body = await request.json()
+    optimized_text = body.get("optimized_text", "") or body.get("resume_text", "")
+    clean_text = optimized_text.replace("[NEW]", "").strip()
+
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.page_width = Inches(8.5)
+        section.page_height = Inches(11)
+        margin = Inches(0.75) if pages >= 2 else Inches(0.6)
+        section.top_margin = section.bottom_margin = margin
+        section.left_margin = section.right_margin = margin
+
+        for line in clean_text.split("\n"):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            run = p.add_run(line.strip())
+            run.font.name = "Arial"
+            run.font.size = Pt(10)
+
+        buf = BytesIO()
+        doc.save(buf)
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": "attachment; filename=optimized_resume.docx"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 @router.post("/generate-docx-text")
 def generate_docx_from_text(payload: DocxFromTextRequest):
