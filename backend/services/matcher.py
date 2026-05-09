@@ -38,7 +38,7 @@ class ResumeMatcher:
         # 第五步：动态权重评分 + TF-IDF 混合
         llm_score = self._calculate_score(skill_results, experience_score, jd_parsed)
         tfidf = tfidf_score(resume_text, jd_text)
-        overall_score = round(tfidf * 0.4 + llm_score * 0.6)
+        overall_score = round(tfidf * 0.2 + llm_score * 0.8)
 
         # 第六步：构建 gaps
         gaps = self._build_gaps(skill_results)
