@@ -1,5 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import {
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -470,6 +483,79 @@ function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afte
                 </div>
               )}
             </div>
+
+            {/* Radar Chart */}
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: "var(--navy)", marginBottom: 12 }}>Score Breakdown</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <RadarChart
+                  data={[
+                    { subject: "Skills", before: overallBefore * 0.4, after: (overallAfter || 0) * 0.4 },
+                    { subject: "Experience", before: analysisResult?.experience_score || 0, after: afterScore?.experience_score || 0 },
+                    { subject: "Keywords", before: analysisResult?.skill_score || 0, after: afterScore?.skill_score || 0 },
+                    { subject: "Overall", before: overallBefore, after: overallAfter || 0 },
+                  ]}
+                >
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
+                  <Radar name="Before" dataKey="before" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.3} />
+                  <Radar name="After" dataKey="after" stroke="#1e3a5f" fill="#1e3a5f" fillOpacity={0.4} />
+                  <Legend />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Skill Gap Bars */}
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: "var(--navy)", marginBottom: 12 }}>Skill Coverage</h3>
+              {(analysisResult?.gaps || []).slice(0, 6).map((g, i) => (
+                <div key={i} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+                    <span>{g.skill}</span>
+                    <span
+                      style={{
+                        color: g.importance === "covered" ? "#16a34a" : g.importance === "partial" ? "#d97706" : "#dc2626",
+                      }}
+                    >
+                      {g.importance === "covered" ? "✓" : g.importance === "partial" ? "~" : "✗"}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: "#f3f4f6", borderRadius: 3 }}>
+                    <div
+                      style={{
+                        height: 6,
+                        borderRadius: 3,
+                        width: g.importance === "covered" ? "100%" : g.importance === "partial" ? "50%" : "10%",
+                        background: g.importance === "covered" ? "#16a34a" : g.importance === "partial" ? "#d97706" : "#dc2626",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Before / After metric bars */}
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: "var(--navy)", marginBottom: 12 }}>Metrics</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart
+                  data={[
+                    { name: "Overall", before: overallBefore, after: overallAfter ?? 0 },
+                    { name: "Skills", before: analysisResult?.skill_score ?? 0, after: afterScore?.skill_score ?? 0 },
+                    { name: "Experience", before: analysisResult?.experience_score ?? 0, after: afterScore?.experience_score ?? 0 },
+                  ]}
+                  margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
+                >
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar name="Before" dataKey="before" fill="#9ca3af" radius={[4, 4, 0, 0]} />
+                  <Bar name="After" dataKey="after" fill="#1e3a5f" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
             <div className="sidebar-controls">
               <div className="ctrl-row">
                 <span className="ctrl-label">Mode</span>
