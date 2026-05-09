@@ -35,10 +35,9 @@ class ResumeMatcher:
             resume_parsed, jd_parsed
         )
 
-        # 第五步：动态权重评分 + TF-IDF 混合
-        llm_score = self._calculate_score(skill_results, experience_score, jd_parsed)
+        # 第五步：动态权重评分（TF-IDF 单独作为参考指标）
+        overall_score = self._calculate_score(skill_results, experience_score, jd_parsed)
         tfidf = tfidf_score(resume_text, jd_text)
-        overall_score = round(tfidf * 0.2 + llm_score * 0.8)
 
         # 第六步：构建 gaps
         gaps = self._build_gaps(skill_results)
