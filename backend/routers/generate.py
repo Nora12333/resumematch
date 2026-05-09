@@ -278,6 +278,8 @@ async def generate_docx_endpoint(request: Request, pages: int = 2):
     optimized_text = body.get("optimized_text", "") or body.get("resume_text", "")
     clean_text = optimized_text.replace("[NEW]", "").strip()
 
+    SECTION_HEADERS = {"EDUCATION", "EXPERIENCE", "PROJECTS", "SKILLS", "SUMMARY", "CERTIFICATIONS"}
+
     try:
         doc = Document()
         section = doc.sections[0]
@@ -287,12 +289,63 @@ async def generate_docx_endpoint(request: Request, pages: int = 2):
         section.top_margin = section.bottom_margin = margin
         section.left_margin = section.right_margin = margin
 
-        for line in clean_text.split("\n"):
-            p = doc.add_paragraph()
-            p.paragraph_format.space_after = Pt(2)
-            run = p.add_run(line.strip())
-            run.font.name = "Arial"
-            run.font.size = Pt(10)
+        lines = clean_text.split("\n")
+        for idx, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped:
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(0)
+                continue
+
+            if idx == 0:
+                p = doc.add_paragraph()
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p.paragraph_format.space_after = Pt(2)
+                run = p.add_run(stripped)
+                run.bold = True
+                run.font.size = Pt(16)
+                run.font.name = "Arial"
+
+            elif idx == 1:
+                p = doc.add_paragraph()
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p.paragraph_format.space_after = Pt(4)
+                run = p.add_run(stripped)
+                run.font.size = Pt(10)
+                run.font.name = "Arial"
+
+            elif stripped.upper() in SECTION_HEADERS:
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(6)
+                p.paragraph_format.space_after = Pt(0)
+                run = p.add_run(stripped.upper())
+                run.bold = True
+                run.font.size = Pt(11)
+                run.font.name = "Arial"
+                pPr = p._p.get_or_add_pPr()
+                pBdr = OxmlElement("w:pBdr")
+                bot = OxmlElement("w:bottom")
+                bot.set(qn("w:val"), "single")
+                bot.set(qn("w:sz"), "6")
+                bot.set(qn("w:space"), "1")
+                bot.set(qn("w:color"), "000000")
+                pBdr.append(bot)
+                pPr.append(pBdr)
+
+            elif stripped.startswith("•"):
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(2)
+                p.paragraph_format.left_indent = Inches(0.15)
+                run = p.add_run(stripped)
+                run.font.size = Pt(10)
+                run.font.name = "Arial"
+
+            else:
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(2)
+                run = p.add_run(stripped)
+                run.font.size = Pt(10)
+                run.font.name = "Arial"
 
         buf = BytesIO()
         doc.save(buf)
