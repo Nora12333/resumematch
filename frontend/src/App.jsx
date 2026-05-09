@@ -326,6 +326,69 @@ function AnalyzePage({ analysisResult, onGenerate, loading, onLogoClick, selecte
               </div>
             ))}
           </div>
+
+          {/* Visual Insights — projected trajectory before running Generate */}
+          {analysisResult != null && (
+            <div style={{ marginTop: 40, padding: 32, background: "#f8f9fb", borderRadius: 16 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", letterSpacing: 1, marginBottom: 4 }}>VISUAL INSIGHTS</div>
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--navy)", marginBottom: 24 }}>Performance Comparison</h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <RadarChart
+                  data={[
+                    { subject: "Skills Match", before: skill, after: Math.min(100, skill + 15) },
+                    { subject: "Experience Match", before: exp, after: Math.min(100, exp + 10) },
+                    { subject: "Keywords Coverage", before: overall * 0.8, after: overall },
+                    { subject: "Education Match", before: 80, after: 85 },
+                    { subject: "Overall Score", before: overall, after: Math.min(100, overall + 12) },
+                  ]}
+                >
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "#6b7280" }} />
+                  <Radar name={`Before (${overall}%)`} dataKey="before" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.3} />
+                  <Radar name="After (projected)" dataKey="after" stroke="#1e3a5f" fill="#1e3a5f" fillOpacity={0.4} />
+                  <Legend />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Skill Coverage bars */}
+          <div style={{ marginTop: 32 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--navy)", marginBottom: 16 }}>Skill Coverage</h3>
+            {ungappedGaps.slice(0, 6).map((g, i) => (
+              <div key={i} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                  <span>{g.skill}</span>
+                  <span
+                    style={{
+                      color:
+                        g.importance === "covered"
+                          ? "#16a34a"
+                          : g.importance === "partial"
+                            ? "#d97706"
+                            : "#dc2626",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {g.importance === "covered" ? "Covered" : g.importance === "partial" ? "Partial" : "Missing"}
+                  </span>
+                </div>
+                <div style={{ height: 8, background: "#e5e7eb", borderRadius: 4 }}>
+                  <div
+                    style={{
+                      height: 8,
+                      borderRadius: 4,
+                      width: g.importance === "covered" ? "100%" : g.importance === "partial" ? "55%" : "8%",
+                      background:
+                        g.importance === "covered" ? "#16a34a" : g.importance === "partial" ? "#d97706" : "#dc2626",
+                      transition: "width 0.5s ease",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="two-col" style={{ marginTop: 40 }}>
             <div>
               <h2 className="section-h2">Skill Gaps</h2>
