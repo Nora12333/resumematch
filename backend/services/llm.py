@@ -27,8 +27,8 @@ def _dotenv_candidates() -> list[Path]:
         Path.cwd() / ".env",
         Path.cwd() / "backend" / ".env",
         _BACKEND_ROOT / ".env",
-        Path.home() / "resumematch" / "backend" / ".env",
     ]
+    
 
 
 def _load_env() -> None:
