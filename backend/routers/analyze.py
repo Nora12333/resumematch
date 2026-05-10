@@ -30,9 +30,6 @@ async def parse_pdf(file: UploadFile = File(...)):
     except Exception as e:
         return {"error": str(e), "text": ""}
 
-import os
 
-@router.get("/debug-key")
-def debug_key():
-    key = os.environ.get("ANTHROPIC_API_KEY", "NOT_SET")
-    return {"key_prefix": key[:15] if key != "NOT_SET" else "NOT_SET", "key_length": len(key)}
+
+
