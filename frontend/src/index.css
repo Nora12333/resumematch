@@ -531,3 +531,9 @@ body {
   transition: all 0.15s;
 }
 .upload-file-btn:hover { border-color: var(--navy); color: var(--navy); }
+
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}

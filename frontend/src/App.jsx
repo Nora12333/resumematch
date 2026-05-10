@@ -301,7 +301,11 @@ function AnalyzePage({ analysisResult, onGenerate, loading, onLogoClick, selecte
 
   const selectedGapsData = gaps.filter(g => selectedKeywords.includes(g.skill));
 
-  const scoreColor = (v) => v >= 75 ? "#16a34a" : v >= 50 ? "#d97706" : "#dc2626";
+  const scoreGradient = (v) => v >= 75
+    ? "linear-gradient(135deg, #16a34a, #4ade80)"
+    : v >= 50
+    ? "linear-gradient(135deg, #d97706, #fbbf24)"
+    : "linear-gradient(135deg, #dc2626, #f87171)";
 
   return (
     <PageWrapper>
@@ -311,138 +315,220 @@ function AnalyzePage({ analysisResult, onGenerate, loading, onLogoClick, selecte
         </nav>
         <StepBar step={2} />
         <div className="page-body">
-          <div className="page-heading">
-            <h1 className="page-title">Analysis Results</h1>
-            <p className="page-sub">Here's how your resume matches the job description</p>
-          </div>
-          <div className="score-cards">
-            {[{ label: "OVERALL SCORE", value: overall }, { label: "SKILL SCORE", value: skill }, { label: "EXPERIENCE SCORE", value: exp }].map(s => (
-              <div key={s.label} className="score-card">
-                <div className="sc-label">{s.label}</div>
-                <div className="sc-value" style={{ color: scoreColor(s.value) }}>{s.value}%</div>
-                <div className="sc-bar-bg">
-                  <div className="sc-bar-fill" style={{ width: `${s.value}%`, background: scoreColor(s.value) }} />
-                </div>
-              </div>
-            ))}
-          </div>
+          <AnimatedSection delay={0}>
+            <div className="page-heading">
+              <h1 className="page-title">Analysis Results</h1>
+              <p className="page-sub">Here's how your resume matches the job description</p>
+            </div>
+          </AnimatedSection>
 
-          {/* Visual Insights — projected trajectory before running Generate */}
-          {analysisResult != null && (
-            <div style={{ marginTop: 40, padding: 32, background: "#f8f9fb", borderRadius: 16 }}>
-              <div style={{ fontSize: 12, color: "var(--muted)", letterSpacing: 1, marginBottom: 4 }}>VISUAL INSIGHTS</div>
-              <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--navy)", marginBottom: 24 }}>Performance Comparison</h2>
-              <ResponsiveContainer width="100%" height={280}>
-                <RadarChart
-                  data={[
-                    { subject: "Skills Match", before: skill, after: Math.min(100, skill + 15) },
-                    { subject: "Experience Match", before: exp, after: Math.min(100, exp + 10) },
-                    { subject: "Keywords Coverage", before: overall * 0.8, after: overall },
-                    { subject: "Education Match", before: 80, after: 85 },
-                    { subject: "Overall Score", before: overall, after: Math.min(100, overall + 12) },
-                  ]}
-                >
-                  <PolarGrid />
+          {/* Score Cards */}
+          <AnimatedSection delay={0.1}>
+            <div className="score-cards">
+              {[
+                { label: "OVERALL SCORE", value: overall },
+                { label: "SKILL SCORE", value: skill },
+                { label: "EXPERIENCE SCORE", value: exp }
+              ].map((s, i) => (
+                <div key={s.label} className="score-card" style={{
+                  background: "white",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 16,
+                  padding: 24,
+                  position: "relative",
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    position: "absolute", top: -20, right: -20,
+                    width: 100, height: 100, borderRadius: "50%",
+                    background: scoreGradient(s.value),
+                    opacity: 0.08,
+                  }} />
+                  <div className="sc-label" style={{ fontSize: 11, letterSpacing: 1, color: "#9ca3af", marginBottom: 8 }}>{s.label}</div>
+                  <div style={{
+                    fontSize: 48, fontWeight: 800,
+                    fontFamily: "'Playfair Display', serif",
+                    background: scoreGradient(s.value),
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    lineHeight: 1,
+                    marginBottom: 16,
+                  }}>
+                    {s.value}%
+                  </div>
+                  <div style={{ height: 6, background: "#f3f4f6", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{
+                      height: 6, borderRadius: 3,
+                      width: `${s.value}%`,
+                      background: scoreGradient(s.value),
+                      transition: "width 1s cubic-bezier(0.22, 1, 0.36, 1)",
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </AnimatedSection>
+
+          {/* Radar Chart */}
+          <AnimatedSection delay={0.15}>
+            <div style={{
+              marginTop: 40, padding: 32,
+              background: "linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%)",
+              borderRadius: 20, border: "1px solid #e0e7ff",
+            }}>
+              <div style={{ fontSize: 11, color: "#6366f1", letterSpacing: 2, marginBottom: 4, fontWeight: 600 }}>VISUAL INSIGHTS</div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--navy)", marginBottom: 24 }}>Performance Comparison</h2>
+              <ResponsiveContainer width="100%" height={260}>
+                <RadarChart data={[
+                  { subject: "Skills", before: skill, after: Math.min(100, skill + 15) },
+                  { subject: "Experience", before: exp, after: Math.min(100, exp + 10) },
+                  { subject: "Keywords", before: Math.round(overall * 0.8), after: overall },
+                  { subject: "Education", before: 80, after: 85 },
+                  { subject: "Overall", before: overall, after: Math.min(100, overall + 12) },
+                ]}>
+                  <PolarGrid stroke="#e0e7ff" />
                   <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "#6b7280" }} />
-                  <Radar name={`Before (${overall}%)`} dataKey="before" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.3} />
-                  <Radar name="After (projected)" dataKey="after" stroke="#1e3a5f" fill="#1e3a5f" fillOpacity={0.4} />
-                  <Legend />
+                  <Radar name={`Before (${overall}%)`} dataKey="before" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} strokeWidth={2} />
+                  <Radar name="After (projected)" dataKey="after" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} strokeWidth={2} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
-          )}
+          </AnimatedSection>
 
-          {/* Skill Coverage bars */}
-          <div style={{ marginTop: 32 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--navy)", marginBottom: 16 }}>Skill Coverage</h3>
-            {ungappedGaps.slice(0, 6).map((g, i) => (
-              <div key={i} style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-                  <span>{g.skill}</span>
-                  <span
-                    style={{
-                      color:
-                        g.importance === "covered"
-                          ? "#16a34a"
-                          : g.importance === "partial"
-                            ? "#d97706"
-                            : "#dc2626",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {g.importance === "covered" ? "Covered" : g.importance === "partial" ? "Partial" : "Missing"}
-                  </span>
-                </div>
-                <div style={{ height: 8, background: "#e5e7eb", borderRadius: 4 }}>
-                  <div
-                    style={{
-                      height: 8,
-                      borderRadius: 4,
-                      width: g.importance === "covered" ? "100%" : g.importance === "partial" ? "55%" : "8%",
-                      background:
-                        g.importance === "covered" ? "#16a34a" : g.importance === "partial" ? "#d97706" : "#dc2626",
-                      transition: "width 0.5s ease",
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="two-col" style={{ marginTop: 40 }}>
-            <div>
-              <h2 className="section-h2">Skill Gaps</h2>
-              <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>These skills are missing or underrepresented in your resume.</p>
-              <div className="gaps-list">
-                {ungappedGaps.map((g, i) => (
-                  <div key={i} className="gap-row" style={{flexDirection:"column", alignItems:"flex-start", gap:4}}>
-                  <div style={{display:"flex", justifyContent:"space-between", width:"100%", alignItems:"center"}}>
-                    <span className="gap-name">{g.skill}</span>
-                    <span className={`gap-badge ${g.importance === "required" ? "high" : "medium"}`}>
-                      {g.importance === "required" ? "High" : "Medium"}
+          {/* Skill Coverage */}
+          <AnimatedSection delay={0.2}>
+            <div style={{
+              marginTop: 32, padding: 28,
+              background: "white", borderRadius: 20,
+              border: "1px solid #e5e7eb",
+            }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--navy)", marginBottom: 20 }}>Skill Coverage</h3>
+              {ungappedGaps.slice(0, 6).map((g, i) => (
+                <div key={i} style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 500 }}>{g.skill}</span>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20,
+                      background: g.importance === "covered" ? "#dcfce7" : g.importance === "partial" ? "#fef3c7" : "#fee2e2",
+                      color: g.importance === "covered" ? "#16a34a" : g.importance === "partial" ? "#d97706" : "#dc2626",
+                    }}>
+                      {g.importance === "covered" ? "✓ Covered" : g.importance === "partial" ? "~ Partial" : "✗ Missing"}
                     </span>
                   </div>
-                  {g.suggestion_en && (
-                    <p style={{fontSize:12, color:"var(--muted)", lineHeight:1.5, paddingBottom:4}}>{g.suggestion_en}</p>
-                  )}
+                  <div style={{ height: 6, background: "#f3f4f6", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{
+                      height: 6, borderRadius: 3,
+                      width: g.importance === "covered" ? "100%" : g.importance === "partial" ? "55%" : "8%",
+                      background: g.importance === "covered"
+                        ? "linear-gradient(90deg, #16a34a, #4ade80)"
+                        : g.importance === "partial"
+                        ? "linear-gradient(90deg, #d97706, #fbbf24)"
+                        : "linear-gradient(90deg, #dc2626, #f87171)",
+                      transition: `width 0.8s cubic-bezier(0.22, 1, 0.36, 1) ${i * 0.1}s`,
+                    }} />
+                  </div>
                 </div>
-                ))}
-                {ungappedGaps.length === 0 && <p style={{ color: "#16a34a", fontSize: 14, padding: 16, fontWeight: 600 }}>✓ No major gaps found!</p>}
-              </div>
-            </div>
-            <div>
-              <h2 className="section-h2" style={{ marginBottom: 8 }}>Keywords</h2>
-              <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Click unmatched keywords to ask AI to add them.</p>
-              <div className="keywords-wrap">
-                {keywords.map((k, i) => {
-                  const isSelected = selectedKeywords.includes(k.word);
-                  return (
-                    <div key={i}
-                      className={`kw-tag ${k.matched ? "matched" : ""} ${isSelected ? "kw-selected" : ""}`}
-                      onClick={() => !k.matched && toggleKeyword(k.word)}
-                      style={{ cursor: k.matched ? "default" : "pointer", userSelect: "none" }}>
-                      {k.word}{k.matched ? " ✓" : isSelected ? " ✓" : ""}
-                    </div>
-                  );
-                })}
-              </div>
-              {selectedKeywords.length > 0 && (
-                <p style={{ fontSize: 13, color: "var(--navy)", marginTop: 12, fontWeight: 600 }}>
-                  {selectedKeywords.length} keyword{selectedKeywords.length > 1 ? "s" : ""} selected to add
-                </p>
+              ))}
+              {ungappedGaps.length > 0 && (
+                <div style={{ marginTop: 16, fontSize: 12, color: "#6b7280" }}>
+                  Coverage: {Math.round((gaps.filter(g => g.importance === "covered").length / Math.max(gaps.length, 1)) * 100)}%
+                </div>
               )}
             </div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 40 }}>
-            <button className="navy-btn large" onClick={() => onGenerate(selectedGapsData)} disabled={loading}>
-              {loading ? "Generating..." : "Generate Optimized Resume →"}
-            </button>
-          </div>
+          </AnimatedSection>
+
+          {/* Skill Gaps + Keywords */}
+          <AnimatedSection delay={0.25}>
+            <div className="two-col" style={{ marginTop: 32 }}>
+              <div style={{ padding: 28, background: "white", borderRadius: 20, border: "1px solid #e5e7eb" }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)", marginBottom: 6 }}>Skill Gaps</h2>
+                <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Missing or underrepresented in your resume.</p>
+                <div className="gaps-list">
+                  {ungappedGaps.map((g, i) => (
+                    <div key={i} className="gap-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                        <span className="gap-name">{g.skill}</span>
+                        <span style={{
+                          fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20,
+                          background: g.importance === "required" ? "#fee2e2" : "#fef3c7",
+                          color: g.importance === "required" ? "#dc2626" : "#d97706",
+                        }}>
+                          {g.importance === "required" ? "High" : "Medium"}
+                        </span>
+                      </div>
+                      {g.suggestion_en && (
+                        <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, paddingBottom: 4 }}>{g.suggestion_en}</p>
+                      )}
+                    </div>
+                  ))}
+                  {ungappedGaps.length === 0 && (
+                    <div style={{ padding: 20, textAlign: "center" }}>
+                      <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
+                      <p style={{ color: "#16a34a", fontWeight: 600 }}>No major gaps found!</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ padding: 28, background: "white", borderRadius: 20, border: "1px solid #e5e7eb" }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)", marginBottom: 6 }}>Keywords</h2>
+                <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Click unmatched keywords to add them.</p>
+                <div className="keywords-wrap">
+                  {keywords.map((k, i) => {
+                    const isSelected = selectedKeywords.includes(k.word);
+                    return (
+                      <div key={i}
+                        onClick={() => !k.matched && toggleKeyword(k.word)}
+                        style={{
+                          padding: "6px 14px", borderRadius: 20, fontSize: 12,
+                          cursor: k.matched ? "default" : "pointer",
+                          userSelect: "none",
+                          border: k.matched ? "1px solid #bbf7d0" : isSelected ? "1px solid #1e3a5f" : "1px solid #e5e7eb",
+                          background: k.matched
+                            ? "linear-gradient(135deg, #f0fdf4, #dcfce7)"
+                            : isSelected
+                            ? "linear-gradient(135deg, #1e3a5f, #2d5a8e)"
+                            : "#f9fafb",
+                          color: k.matched ? "#16a34a" : isSelected ? "white" : "#6b7280",
+                          fontWeight: k.matched || isSelected ? 600 : 400,
+                          transition: "all 0.15s ease",
+                          marginBottom: 6,
+                        }}
+                      >
+                        {k.word}{k.matched ? " ✓" : isSelected ? " ✓" : ""}
+                      </div>
+                    );
+                  })}
+                </div>
+                {selectedKeywords.length > 0 && (
+                  <p style={{ fontSize: 13, color: "var(--navy)", marginTop: 16, fontWeight: 600 }}>
+                    {selectedKeywords.length} keyword{selectedKeywords.length > 1 ? "s" : ""} selected
+                  </p>
+                )}
+              </div>
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={0.3}>
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 40, marginBottom: 40 }}>
+              <button className="navy-btn large" onClick={() => onGenerate(selectedGapsData)} disabled={loading}
+                style={{
+                  background: "linear-gradient(135deg, #1e3a5f, #2d5a8e)",
+                  boxShadow: "0 4px 20px rgba(30, 58, 95, 0.3)",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {loading ? "Generating..." : "Generate Optimized Resume →"}
+              </button>
+            </div>
+          </AnimatedSection>
         </div>
       </div>
     </PageWrapper>
   );
 }
+
 
 function ComparePage({ resumeText, jdText, generatedResult, analysisResult, afterScore, onRegenerate, loading, mode, setMode, apiBase, selectedGapsData, onLogoClick }) {
   const optimized = generatedResult?.optimized_resume || "";
