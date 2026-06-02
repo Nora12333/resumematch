@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
-
+# Output files
+batch_results.csv
+*_results.csv
+outputs/
 # Python
 __pycache__/
 *.py[cod]
